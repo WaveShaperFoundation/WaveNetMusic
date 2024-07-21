@@ -1,3 +1,4 @@
+use std::env;
 use std::error::Error;
 use std::io::Cursor;
 use std::sync::{Arc};
@@ -29,13 +30,15 @@ use crate::services::search_service::SearchService;
 pub struct LibraryService {
     database_connection: Arc<RwLock<DatabaseConnection>>,
     search_service: Arc<RwLock<SearchService>>,
+    library_path: String,
 }
 
 impl LibraryService {
-    pub fn new(database_connection: Arc<RwLock<DatabaseConnection>>, search_service: Arc<RwLock<SearchService>>) -> Self {
+    pub fn new(database_connection: Arc<RwLock<DatabaseConnection>>, search_service: Arc<RwLock<SearchService>>, library_path:String) -> Self {
         Self {
             database_connection,
             search_service,
+            library_path
         }
     }
 
@@ -275,7 +278,8 @@ impl LibraryService {
 
     pub async fn index_library(&self) -> Result<String, WaveError> {
         let mut log = Logger::new();
-        let library_path = String::from("D:\\wavenet\\TIDAL Rip\\Album");
+
+        let library_path = self.library_path.clone();
         //Iterate through the library path and index all files ending with .flac
         log.loading(format!("Indexing library at {}",library_path.clone()));
 
