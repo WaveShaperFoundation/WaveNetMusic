@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package wavenet;
+
+service Authentication {
+    rpc Login(LoginRequest) returns (LoginResponse);
+    rpc Logins(LoginRequest) returns (GetArtistsResponse);
+}
+
+service Library {
+    rpc GetAlbums(Empty) returns (GetAlbumsResponse);
+    rpc GetAlbum(GetAlbumRequest) returns (AlbumDetails);
+    rpc GetTracks(Empty) returns (GetTracksResponse);
+    rpc GetAlbumTracks(GetAlbumRequest) returns (GetTracksResponse);
+    rpc GetTrack(GetTrackRequest) returns (Track);
+    rpc GetArtists(Empty) returns (GetArtistsResponse);
+    rpc GetArtist(GetArtistRequest) returns (ArtistWithAlbums);
+    rpc IndexLibrary(Empty) returns (Empty);
+    rpc SearchQuery(SearchQueryRequest) returns (SearchQueryResponse);
+}
+
+message SearchQueryRequest {
+    string query = 1;
+}
+
+message SearchQueryResponse {
+    repeated Track tracks = 2;
+}
+
+message GetAlbumsResponse {
+    repeated Album albums = 1;
+}
+
+message GetAlbumRequest {
+    int32 id = 1;
+}
+
+message GetTrackRequest {
+    int32 id = 1;
+}
+
+message GetArtistRequest {
+    int32 id = 1;
+}
+
+message GetArtistsResponse {
+    repeated Artist artists = 1;
+}
+
+
+
+message GetTracksResponse {
+    repeated Track tracks = 1;
+}
+
+message Empty {
+
+}
+
+message Artist {
+    int32 id = 1;
+    string name = 2;
+}
+
+message ArtistWithAlbums {
+    Artist artist = 1;
+    repeated Album albums = 2;
+}
+
+message Album {
+    int32 id = 1;
+    string name = 2;
+    repeated Artist artists = 3;
+    int32 year = 4;
+    string blurhash = 5;
+}
+
+message AlbumDetails {
+    int32 id = 1;
+    string name = 2;
+    repeated Artist artists = 3;
+    int32 year = 4;
+    string blurhash = 5;
+    repeated Track tracks = 6;
+}
+
+message Track{
+    int32 id = 1;
+    string name = 2;
+    Album album = 3;
+    repeated Artist artists = 4;
+    int32 year = 5;
+    int32 length = 6;
+}
+
+message LoginRequest {
+    int32 username = 1;
+    int32 password = 2;
+}
+
+message LoginResponse {
+    int32 token = 1;
+    int32 status = 2;
+}
