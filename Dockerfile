@@ -1,5 +1,5 @@
 # Use the official Rust image as the base image
-FROM rust:alpine as builder
+FROM rust:latest as builder
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -19,11 +19,23 @@ COPY migration ./migration
 # Copy entity files
 COPY entity ./entity
 
+# Copy proto files
+COPY proto ./proto
+
+# Copy build.rs
+COPY build.rs ./build.rs
+
+# Copy mod.rs
+COPY mod.rs ./mod.rs
+
+# Install protobuf
+RUN apt-get update && apt-get install -y protobuf-compiler
+
 # Build the application
 RUN cargo build --release
 
 # Use a minimal Alpine image as the base image for the final image
-FROM alpine:latest as runtime
+FROM debian:bookworm-slim
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -39,5 +51,6 @@ EXPOSE 3000
 # Copy the built binary from the builder stage to the final image
 COPY --from=builder /app/target/release/wavenet .
 
+VOLUME ["/library"]
 # Set the entrypoint for the container
 ENTRYPOINT ["./wavenet"]

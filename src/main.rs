@@ -51,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let web_port = env::var("WEB_PORT").unwrap_or_else(|_| "3000".to_string());
     let postgres_url = env::var("POSTGRES_URL").unwrap_or_else(|_| "postgres://dogukan:sixfour@localhost:5432/wavenet".to_string());
     let meilsearch_url = env::var("MEILISEARCH_API_URL").unwrap_or_else(|_| "http://localhost:7700".to_string());
-    let library_path = env::var("LIBRARY_PATH").unwrap_or_else(|_| "http://localhost:7700".to_string());
+    let library_path = env::var("LIBRARY_PATH").unwrap_or_else(|_| "/library".to_string());
 
     let search_service = SearchService::new(meilsearch_url.clone(), None).await;
     //search_service.drop_all().await.unwrap();
