@@ -35,6 +35,10 @@ dotenv = { version = "0.15.0", features = ["cli"] }
 meilisearch-sdk = {version = "0.26.1", features = ["default"]}
 serde_json = "1.0.117"
 paris = "1.5.15"
+argon2 = "0.5.3"
+jwt = "0.16.0"
+hmac = "0.12.1"
+sha2 = "0.10.8"
 
 [build-dependencies]
 tonic-build = "0.11.0"

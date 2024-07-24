@@ -5,17 +5,20 @@ use tonic::{Request, Response, Status};
 use crate::proto::wavenet::authentication_server::Authentication;
 use crate::proto::wavenet::{GetArtistsResponse, LoginRequest, LoginResponse};
 use crate::proto::wavenet::Artist as ArtistTonic;
-use entity::artist::{Entity as ArtistDatabase,};
+use crate::services::auth_proto::AuthenticationService;
+use entity::artist::{Entity as ArtistDatabase};
 
 pub struct AuthenticationServiceRPC {
-    database_connection: Arc<RwLock<DatabaseConnection>>
+    database_connection: Arc<RwLock<DatabaseConnection>>,
+    authentication_service:Arc<RwLock<AuthenticationService>>
 }
 
 impl AuthenticationServiceRPC {
     //database connection
-    pub fn new(database_connection: Arc<RwLock<DatabaseConnection>>) -> Self {
+    pub fn new(database_connection: Arc<RwLock<DatabaseConnection>>, authentication_service:Arc<RwLock<AuthenticationService>>) -> Self {
         Self {
-            database_connection
+            database_connection,
+            authentication_service
         }
     }
 

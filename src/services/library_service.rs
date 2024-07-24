@@ -1,14 +1,13 @@
-use std::env;
 use std::error::Error;
 use std::io::Cursor;
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::time::SystemTime;
 use audiotags::{Picture, Tag};
 use blurhash::encode;
 use image::{EncodableLayout, GenericImageView};
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, IntoActiveModel, ModelTrait, NotSet, QueryFilter, TryIntoModel};
 use sea_orm::ActiveValue::Set;
-use tokio::sync::{RwLock};
+use tokio::sync::RwLock;
 use entity::{album, artist, artist_album, artist_track, track};
 use walkdir::WalkDir;
 use entity::prelude::{Album, ArtistTrack, Track};

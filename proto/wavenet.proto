@@ -48,7 +48,6 @@ message GetArtistsResponse {
 }
 
 
-
 message GetTracksResponse {
     repeated Track tracks = 1;
 }

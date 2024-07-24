@@ -2,3 +2,5 @@
 /migration/target
 .env
 .idea
+/app/build
+build.sh

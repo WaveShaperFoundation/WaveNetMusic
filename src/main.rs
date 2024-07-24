@@ -15,6 +15,7 @@ use std::sync::Arc;
 use axum::response::{IntoResponse};
 use axum::{Router};
 use axum::routing::get;
+use services::auth_proto::AuthenticationService;
 use tonic::transport::Server;
 use sea_orm::{DatabaseConnection};
 use sea_orm::Database;
@@ -32,9 +33,12 @@ use crate::proto::wavenet::library_server::LibraryServer;
 use crate::routes::axum_routes::{retrieve_album_cover, stream_audio_file};
 use dotenv::dotenv;
 use std::env;
+use tonic::Request;
 use crate::models::error::WaveError;
 use crate::services::search_service::SearchService;
 use paris::Logger;
+use tonic::Status;
+use tonic::metadata::MetadataValue;
 
 #[derive(Clone)]
 struct AppState {
@@ -52,6 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let postgres_url = env::var("POSTGRES_URL").unwrap_or_else(|_| "postgres://dogukan:sixfour@localhost:5432/wavenet".to_string());
     let meilsearch_url = env::var("MEILISEARCH_API_URL").unwrap_or_else(|_| "http://localhost:7700".to_string());
     let library_path = env::var("LIBRARY_PATH").unwrap_or_else(|_| "/library".to_string());
+    let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| "notreallythatsecretimo".to_string());
 
     let search_service = SearchService::new(meilsearch_url.clone(), None).await;
     //search_service.drop_all().await.unwrap();
@@ -70,24 +75,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let library_service = library_arc.clone();
     let lib_clone = library_arc.clone();
-    let library_services_clone = lib_clone.write().await.index_library().await;
-    match library_services_clone {
-        Ok(_) => {  }
-        Err(error) => {
-            println!("Error: {}",error);
+    if(true){
+        let library_services_clone = lib_clone.write().await.index_library().await;
+        match library_services_clone {
+            Ok(_) => {  }
+            Err(error) => {
+                println!("Error: {}",error);
+            }
         }
     }
+
+    let authentication_service = Arc::new(RwLock::new(AuthenticationService::new(connection_arc.clone(), jwt_secret.clone())));
 
     let reflection_service = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(wavenet::FILE_DESCRIPTOR_SET)
         .build()
         .unwrap();
 
-    let inventory = AuthenticationServiceRPC::new(connection_arc.clone());
+    let auth_service = AuthenticationServiceRPC::new(connection_arc.clone(),authentication_service);
 
-    let auth_server = AuthenticationServer::new(inventory);
+    let auth_server = AuthenticationServer::new(auth_service);
 
-    let library_server = LibraryServer::new(LibraryServiceRPC::new(connection_arc.clone(), library_arc.clone(), search_service_arc.clone()));
+    let library_server = LibraryServer::with_interceptor(LibraryServiceRPC::new(connection_arc.clone(), library_arc.clone(), search_service_arc.clone()),check_jwt_token);
 
     let state = AppState { db: connection_arc, library_service };
 
@@ -116,4 +125,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Tonic was running");
 
     Ok(())
+}
+
+
+fn check_jwt_token(req: Request<()>) -> Result<Request<()>, Status> {
+    let token: MetadataValue<_> = "topkek".parse().unwrap();
+
+    match req.metadata().get("JWT") {
+        Some(t) if token == t => Ok(req),
+        _ => Err(Status::unauthenticated("No valid auth token")),
+    }
 }

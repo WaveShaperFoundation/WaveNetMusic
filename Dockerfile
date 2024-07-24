@@ -41,11 +41,11 @@ FROM debian:bookworm-slim
 WORKDIR /app
 
 # Arguments
-ARG POSTGRES_URL="postgres://admin:admin@localhost/wavenet"
-ARG GRPC_PORT="50051"
-ARG WEB_PORT="3000"
-ARG MEILISEARCH_URL="http://localhost:7700"
-ARG MEILISEARCH_KEY="masterKey"
+ENV POSTGRES_URL=${POSTGRES_URL}
+ENV GRPC_PORT=${GRPC_PORT}
+ENV WEB_PORT=${WEB_PORT}
+ENV MEILISEARCH_URL=${MEILISEARCH_URL}
+ENV MEILISEARCH_KEY=${MEILISEARCH_KEY}
 
 EXPOSE 3000
 # Copy the built binary from the builder stage to the final image
