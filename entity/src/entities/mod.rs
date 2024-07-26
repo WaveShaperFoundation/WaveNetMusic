@@ -7,3 +7,4 @@ pub mod artist;
 pub mod artist_album;
 pub mod artist_track;
 pub mod track;
+pub mod user;

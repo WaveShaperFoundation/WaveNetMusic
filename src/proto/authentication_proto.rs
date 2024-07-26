@@ -27,11 +27,28 @@ impl AuthenticationServiceRPC {
 #[tonic::async_trait]
 impl Authentication for AuthenticationServiceRPC {
     async fn login(&self, _request: Request<LoginRequest>) -> Result<Response<LoginResponse>, Status> {
-        let x = LoginResponse {
-            status: 1,
-            token: 1,
-        };
-        Ok(Response::new(x))
+        let request_inner = _request.into_inner();
+        let username = request_inner.username.clone();
+        let password = request_inner.password.clone();
+        let authentication_service = self.authentication_service.read().await;
+        let user = authentication_service.authenticate_credentials(username, password).await.unwrap();
+        match user {
+            Some(user) => {
+                let token = authentication_service.create_token(user).await.unwrap();
+                let x = LoginResponse {
+                    status: 1,
+                    token: Some(token),
+                };
+                Ok(Response::new(x))
+            },
+            None => {
+                let x = LoginResponse {
+                    status: 0,
+                    token: None,
+                };
+                Ok(Response::new(x))
+            }
+        }
     }
 
     async fn logins(&self, _request: Request<LoginRequest>) -> Result<Response<GetArtistsResponse>, Status> {
