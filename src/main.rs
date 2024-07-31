@@ -60,6 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let web_port = env::var("WEB_PORT").unwrap_or_else(|_| "3000".to_string());
     let postgres_url = env::var("POSTGRES_URL").unwrap_or_else(|_| "postgres://dogukan:sixfour@localhost:5432/wavenet".to_string());
     let meilsearch_url = env::var("MEILISEARCH_API_URL").unwrap_or_else(|_| "http://localhost:7700".to_string());
+    let meilsearch_key = env::var("MEILISEARCH_API_KEY").unwrap_or_else(|_| "MEILISEARCH-KEY".to_string());
     let library_path = env::var("LIBRARY_PATH").unwrap_or_else(|_| "/library".to_string());
     let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| "notreallythatsecretimo".to_string());
 
