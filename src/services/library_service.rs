@@ -241,7 +241,7 @@ impl LibraryService {
 
         let album_artists = album_result
             .iter()
-            .map(|(album, artists)| {
+            .map(|(_album, artists)| {
                 artists.iter().map(|artist| {
                     ArtistModel {
                         id: artist.id,
@@ -260,7 +260,7 @@ impl LibraryService {
 
         match album_result.first() {
             Some(result) => {
-                let (album, artists) = result;
+                let (album, _artists) = result;
 
                 Ok(AlbumModel {
                     id: album.id,
@@ -737,6 +737,18 @@ impl LibraryService {
         match artist_insert {
             Ok(artist) => Ok(artist),
             Err(e) => Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))
+        }
+    }
+
+    async fn insert_artist(&self, artist: entity::artist::ActiveModel, connection: &DatabaseConnection) {
+        let artist_insert = artist.insert(connection).await;
+        match artist_insert {
+            Ok(artist) => {
+                println!("Inserted artist {}", artist.name.clone());
+            }
+            Err(e) => {
+                println!("Error inserting artist: {:?}", e);
+            }
         }
     }
 

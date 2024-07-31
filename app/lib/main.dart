@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:app/pages/home_page.dart';
+import 'package:app/pages/launch_page.dart';
 import 'package:app/services/audio_handler.dart';
 import 'package:app/services/generated/wavenet.pbgrpc.dart';
 import 'package:app/services/waveclient.dart';
@@ -10,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:grpc/grpc.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
-
+import 'package:smtc_windows/smtc_windows.dart';
 
 void main() async {
   runApp(const MyApp());
@@ -23,24 +24,59 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     AudioPlayer player = AudioPlayer();
+    print("CREATING SMTC OBJECT");
+    SMTCWindows? smtc;
+
+    if (Platform.isWindows) {
+      smtc = SMTCWindows(
+        metadata: const MusicMetadata(
+          title: 'No track playing',
+          album: 'No album selected',
+          albumArtist: 'N/A',
+          artist: 'Artist',
+          thumbnail:
+              'https://media.glamour.com/photos/5f4c44e20c71c58fc210d35f/master/w_2560%2Cc_limit/mgid_ao_image_mtv.jpg',
+        ),
+        timeline: const PlaybackTimeline(
+          startTimeMs: 0,
+          endTimeMs: 1000,
+          positionMs: 0,
+          minSeekTimeMs: 0,
+          maxSeekTimeMs: 1000,
+        ),
+      );
+    }
 
     return MultiProvider(
       providers: [
+        Provider<SMTCWindows?>(
+          create: (context) {
+            return smtc;
+          },
+          dispose: (context, smtc) {
+            print("Disposing SMTC");
+            smtc?.dispose();
+          },
+        ),
         FutureProvider<WaveAudioHandler>(
-            create: (context) async {
-              print("Creating WaveAudioHandler");
-              return await AudioService.init<WaveAudioHandler>(
-                builder: () => WaveAudioHandler(player: player, loaded: true),
-                config: AudioServiceConfig(
-                  androidNotificationChannelId: 'com.wave.net.app',
-                  androidNotificationChannelName: 'WaveNet',
-                  androidNotificationIcon: 'mipmap/ic_launcher_foreground',
-                  androidStopForegroundOnPause: true,
-                  androidNotificationOngoing: true,
-                ),
-              );
-            },
-            initialData: WaveAudioHandler(player: player)),
+          create: (context) async {
+            print("Creating WaveAudioHandler");
+            return await AudioService.init<WaveAudioHandler>(
+              builder: () =>
+                  WaveAudioHandler(player: player, loaded: true, smtc: smtc),
+              config: const AudioServiceConfig(
+                androidNotificationChannelId: 'com.wave.net.app',
+                androidNotificationChannelName: 'WaveNet',
+                androidNotificationIcon: 'mipmap/ic_stat_wave_svg_borderless',
+                androidStopForegroundOnPause: true,
+                androidNotificationOngoing: true,
+                androidNotificationChannelDescription:
+                    'This is the WaveNet notification media player channel responsible for playing your music',
+              ),
+            );
+          },
+          initialData: WaveAudioHandler(player: player, smtc: smtc),
+        ),
         Provider(
           create: (context) {
             return WaveClient();
@@ -49,7 +85,6 @@ class MyApp extends StatelessWidget {
       ],
       child: DynamicColorBuilder(
         builder: (lightDynamic, darkDynamic) {
-
           ColorScheme lightColorScheme;
           ColorScheme darkColorScheme;
 
@@ -59,13 +94,13 @@ class MyApp extends StatelessWidget {
             lightColorScheme = lightDynamic.harmonized();
             // (Optional) Customize the scheme as desired. For example, one might
             // want to use a brand color to override the dynamic [ColorScheme.secondary].
-            lightColorScheme = lightColorScheme.copyWith(secondary: Colors.green);
+            lightColorScheme =
+                lightColorScheme.copyWith(secondary: Colors.green);
             // (Optional) If applicable, harmonize custom colors.
 
             // Repeat for the dark color scheme.
             darkColorScheme = darkDynamic.harmonized();
             darkColorScheme = darkColorScheme.copyWith(secondary: Colors.green);
-
           } else {
             // Otherwise, use fallback schemes.
             lightColorScheme = ColorScheme.fromSeed(
@@ -85,106 +120,13 @@ class MyApp extends StatelessWidget {
             ),
             darkTheme: ThemeData(
               colorScheme: darkColorScheme,
-              sliderTheme: SliderThemeData(
-                  overlayShape: SliderComponentShape.noThumb
-              ),
+              sliderTheme:
+                  SliderThemeData(overlayShape: SliderComponentShape.noThumb),
             ),
-            home: const HomePage(),
+            home: const LaunchPage(),
           );
         },
       ),
-    );
-  }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-  List<Album> album = [];
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  void _incrementCounter() {
-    try {
-      final channel = ClientChannel('localhost',
-          port: 50051,
-          options: const ChannelOptions(
-            userAgent: "Windoof",
-            credentials: ChannelCredentials.insecure(),
-          ));
-      final stub = LibraryClient(channel);
-
-      try {
-        var response = stub.getAlbums(Empty());
-        response.then((p0) {
-          setState(() {
-            album.clear();
-            album.addAll(p0.albums);
-          });
-        }).catchError((error) {
-          print(error);
-        });
-      } catch (e) {
-        print('Ca asdasdasdught error: $e');
-      }
-      setState(() {
-        _counter++;
-      });
-    } catch (error) {
-      print("Error found ${error.toString()}");
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: ListView.builder(
-          itemBuilder: (context, index) {
-            var context = this.album[index];
-            return ListTile(
-              title: Text(context.name),
-            );
-          },
-          itemCount: this.album.length,
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }

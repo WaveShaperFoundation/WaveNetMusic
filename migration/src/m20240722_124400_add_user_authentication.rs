@@ -18,11 +18,10 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(User::UserName).string().not_null())
+                    .col(ColumnDef::new(User::UserName).string().not_null().unique_key())
                     .col(ColumnDef::new(User::PublicName).string().not_null())
-                    .col(ColumnDef::new(User::Email).string().not_null())
+                    .col(ColumnDef::new(User::Email).string().not_null().unique_key())
                     .col(ColumnDef::new(User::PasswordHash).string().not_null())
-                    .col(ColumnDef::new(User::PasswordSalt).string().not_null())
                     .col(ColumnDef::new(User::RoleLevel).integer().not_null())
                     .to_owned(),
             )
@@ -44,6 +43,5 @@ pub enum User {
     PublicName,
     Email,
     PasswordHash,
-    PasswordSalt,
     RoleLevel,
 }

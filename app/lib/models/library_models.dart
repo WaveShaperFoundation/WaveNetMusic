@@ -22,3 +22,15 @@ class WaveTrack {
   WaveTrack( {required this.id,required this.length, required this.name, required this.album});
 
 }
+
+class WavePlaylist {
+  final int id;
+  final String title;
+  final String description;
+  final String coverSource;
+  final DateTime createdAt;
+
+  WavePlaylist({required this.id, required this.title, required this.description, required this.coverSource, required this.createdAt}){
+
+  }
+}

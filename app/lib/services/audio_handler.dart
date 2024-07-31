@@ -1,67 +1,51 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:app/services/generated/wavenet.pb.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:smtc_windows/smtc_windows.dart';
 
 class WaveAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer player;
-  late final SMTCWindows smtc;
+  late final SMTCWindows? smtc;
   bool loaded = false;
 
+
   @override
-  WaveAudioHandler({this.loaded = false, required this.player}) {
-    if (Platform.isWindows) {
-      smtc = SMTCWindows(
-        metadata: const MusicMetadata(
-          title: 'Title',
-          album: 'Album',
-          albumArtist: 'Album Artist',
-          artist: 'Artist',
-          thumbnail:
-              'https://media.glamour.com/photos/5f4c44e20c71c58fc210d35f/master/w_2560%2Cc_limit/mgid_ao_image_mtv.jpg',
-        ),
-        // Timeline info for the OS media player
-        timeline: const PlaybackTimeline(
-          startTimeMs: 0,
-          endTimeMs: 1000,
-          positionMs: 0,
-          minSeekTimeMs: 0,
-          maxSeekTimeMs: 1000,
-        ),
-        // Which buttons to show in the OS media player
-        config: const SMTCConfig(
-          fastForwardEnabled: true,
-          nextEnabled: true,
-          pauseEnabled: true,
-          playEnabled: true,
-          rewindEnabled: true,
-          prevEnabled: true,
-          stopEnabled: true,
-        ),
-      );
-      smtc.buttonPressStream.listen((event) {
-        switch (event) {
-          case PressedButton.play:
-            // Update playback status
-            smtc.setPlaybackStatus(PlaybackStatus.Playing);
-            break;
-          case PressedButton.pause:
-            smtc.setPlaybackStatus(PlaybackStatus.Paused);
-            break;
-          case PressedButton.next:
-            print('Next');
-            break;
-          case PressedButton.previous:
-            print('Previous');
-            break;
-          case PressedButton.stop:
-            smtc.setPlaybackStatus(PlaybackStatus.Stopped);
-            smtc.disableSmtc();
-            break;
-          default:
-            break;
+  WaveAudioHandler({this.loaded = false, required this.player, required this.smtc}) {
+    print("Creating audio handler");
+    if (Platform.isWindows && smtc != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        print("add post frame callback");
+        try {
+          // Listen to button events and update playback status accordingly
+          smtc!.buttonPressStream.listen((event) {
+            switch (event) {
+              case PressedButton.play:
+              // Update playback status
+                smtc?.setPlaybackStatus(PlaybackStatus.Playing);
+                break;
+              case PressedButton.pause:
+                smtc?.setPlaybackStatus(PlaybackStatus.Paused);
+                break;
+              case PressedButton.next:
+                print('Next');
+                break;
+              case PressedButton.previous:
+                print('Previous');
+                break;
+              case PressedButton.stop:
+                smtc?.setPlaybackStatus(PlaybackStatus.Stopped);
+                smtc?.disableSmtc();
+                break;
+              default:
+                break;
+            }
+          });
+        } catch (e) {
+          debugPrint("Error: $e");
         }
       });
     }
@@ -145,14 +129,30 @@ class WaveAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               extras: {"action": "like", "songId": 2},
               name: 'like'),
         ],
+
       ));
       print("Liked song ${extras!['songId']}");
+
     }
     return super.customAction(name, extras);
   }
 
   Future<void> playTrack(Track track) async {
     print(track);
+
+    if(Platform.isWindows){
+      print("Updating metadata windows smtc");
+      smtc!.updateMetadata(
+        MusicMetadata(
+          title: track.name,
+          album: track.album.name,
+          albumArtist: track.album.artists.join(","),
+          artist: track.album.artists.join(","),
+          thumbnail: 'http://192.168.0.50:3000/cover?id=${track.album.id}',
+        )
+      );
+    }
+
     this
         .player
         .setUrl("http://192.168.0.50:3000/track?id=${track.id}")
@@ -204,6 +204,20 @@ class WaveAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> playMediaItem(MediaItem item) async {
     print(item);
+
+    if(Platform.isWindows){
+      print("Updating metadata windows smtc");
+      smtc?.updateMetadata(
+        MusicMetadata(
+          title: item.title,
+          album: item.album,
+          albumArtist: item.artist,
+          artist: item.artist,
+          thumbnail: item.artUri.toString(),
+        )
+      );
+    }
+
     this.player.setUrl(item.id).then((value) {
       mediaItem.value = item;
       mediaItem.add(item);
@@ -247,5 +261,10 @@ class WaveAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> skipToNext() async {
     print("Skipping to next");
+  }
+
+  void dispose() {
+    player.dispose();
+    smtc?.disableSmtc();
   }
 }

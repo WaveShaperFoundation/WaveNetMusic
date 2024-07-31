@@ -7,15 +7,59 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
+    #[sea_orm(unique)]
     pub user_name: String,
     pub public_name: String,
+    #[sea_orm(unique)]
     pub email: String,
     pub password_hash: String,
-    pub password_salt: String,
     pub role_level: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(has_many = "super::playlist_track_item::Entity")]
+    PlaylistTrackItem,
+    #[sea_orm(has_many = "super::playlist_user::Entity")]
+    PlaylistUser,
+    #[sea_orm(has_many = "super::user_likes::Entity")]
+    UserLikes,
+}
+
+impl Related<super::playlist_track_item::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::PlaylistTrackItem.def()
+    }
+}
+
+impl Related<super::playlist_user::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::PlaylistUser.def()
+    }
+}
+
+impl Related<super::user_likes::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::UserLikes.def()
+    }
+}
+
+impl Related<super::playlist::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::playlist_user::Relation::Playlist.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::playlist_user::Relation::User.def().rev())
+    }
+}
+
+impl Related<super::track::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::user_likes::Relation::Track.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::user_likes::Relation::User.def().rev())
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}

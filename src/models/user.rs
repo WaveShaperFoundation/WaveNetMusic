@@ -7,40 +7,33 @@ pub struct WaveUser{
     pub public_name: String,
     pub email: String,
     pub password_hash: String,
-    pub password_salt: String,
     pub role_level: i32,
 }
 
 impl WaveUser {
-    pub fn new(id: i32, username: String, public_name: String, email: String, password_hash: String, password_salt: String, role_level: i32) -> Self {
+    pub fn new(id: i32, username: String, public_name: String, email: String, password_hash: String, role_level: i32) -> Self {
         Self {
             id,
             username,
             public_name,
             email,
             password_hash,
-            password_salt,
             role_level
         }
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WaveUserToken {
     pub id: i32,
-    pub username: String,
-    pub email: String,
-    pub public_name: String,
-    pub role_level: i32,
+    pub username: String
 }
 
 impl WaveUserToken {
-    pub fn new(id: i32, username: String, email: String, public_name: String, role_level: i32) -> Self {
+    pub fn new(id: i32, username: String) -> Self {
         Self {
             id,
             username,
-            email,
-            public_name,
-            role_level
         }
     }
 }

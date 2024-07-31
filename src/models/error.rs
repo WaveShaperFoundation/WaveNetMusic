@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::error::Error;
 use image::ImageError;
+use tonic::Status;
 
 #[derive(Debug)]
 pub struct WaveError {
@@ -19,6 +20,14 @@ impl WaveError {
             message: message.to_string(),
         }
     }
+}
+
+
+impl From<WaveError> for Status {
+    fn from(error: WaveError) -> Self {
+        Status::new(tonic::Code::Internal, error.message)
+    }
+
 }
 
 impl From<meilisearch_sdk::errors::Error> for WaveError {

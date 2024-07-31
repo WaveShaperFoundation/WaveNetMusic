@@ -5,7 +5,6 @@ package wavenet;
 service Authentication {
     rpc Login(LoginRequest) returns (LoginResponse);
     rpc Register(RegisterRequest) returns (RegisterResponse);
-    rpc Logins(LoginRequest) returns (GetArtistsResponse);
 }
 
 service Library {
@@ -19,6 +18,7 @@ service Library {
     rpc IndexLibrary(Empty) returns (Empty);
     rpc SearchQuery(SearchQueryRequest) returns (SearchQueryResponse);
 }
+
 
 message SearchQueryRequest {
     string query = 1;
@@ -81,7 +81,15 @@ message AlbumDetails {
     repeated Artist artists = 3;
     int32 year = 4;
     string blurhash = 5;
-    repeated Track tracks = 6;
+    repeated AlbumTrack tracks = 6;
+}
+
+message AlbumTrack {
+    int32 id = 1;
+    string name = 2;
+    repeated Artist artists = 3;
+    int32 year = 4;
+    int32 length = 5;
 }
 
 message Track{
@@ -113,4 +121,136 @@ message RegisterRequest {
 
 message RegisterResponse {
    int32 status = 1;
+   optional string token = 2;
+}
+
+service Playlist {
+    rpc GetMyPlaylists(Empty) returns (GetPlaylistsResponse);
+    rpc GetPlaylist(GetPlaylistRequest) returns (PlaylistDetails);
+    rpc CreatePlaylist(CreatePlaylistRequest) returns (CreatePlaylistResponse);
+    rpc DeletePlaylist(DeletePlaylistRequest) returns (DeletePlaylistResponse);
+    rpc ChangePlaylist(ChangePlaylistRequest) returns (ChangePlaylistResponse);
+    rpc AddTrackToPlaylist(AddTrackToPlaylistRequest) returns (AddTrackToPlaylistResponse);
+    rpc MoveTrackInPlaylist(MoveTrackInPlaylistRequest) returns (MoveTrackInPlaylistResponse);
+    rpc RemoveTrackFromPlaylist(RemoveTrackFromPlaylistRequest) returns (RemoveTrackFromPlaylistResponse);
+}
+
+service LikedTracks {
+    rpc GetLikedSongs(Empty) returns (GetTracksResponse);
+    rpc LikeTrack(AddTrackToLikedRequest) returns (AddTrackToLikedResponse);
+    rpc UnlikeTrack(RemoveTrackFromLikedRequest) returns (RemoveTrackFromLikedResponse);
+}
+
+message AddTrackToLikedRequest {
+    int32 trackId = 1;
+}
+
+message AddTrackToLikedResponse {
+    ActionResponse status = 1;
+    int32 likedId = 2;
+}
+
+message RemoveTrackFromLikedRequest {
+    int32 likedId = 1;
+}
+
+message RemoveTrackFromLikedResponse {
+    ActionResponse status = 1;
+}
+
+message ActionResponse {
+    enum Status {
+        OK = 0;
+        ERROR = 1;
+    }
+    Status status = 1;
+    optional string message = 2;
+}
+
+message GetPlaylistRequest {
+    int32 id = 1;
+}
+
+message GetPlaylistsResponse {
+    repeated PlaylistResponse playlists = 1;
+}
+
+message CreatePlaylistRequest {
+    string title = 1;
+    string description = 2;
+}
+
+message ChangePlaylistResponse {
+    ActionResponse status = 1;
+}
+
+message AddTrackToPlaylistRequest {
+    int32 playlistId = 1;
+    int32 trackId = 2;
+}
+
+message AddTrackToPlaylistResponse {
+    ActionResponse status = 1;
+    int32 addedTrackId = 2;
+}
+
+message MoveTrackInPlaylistRequest {
+    int32 playlistTrackId = 1;
+    int32 afterPlaylistTrackId = 2;
+}
+
+message MoveTrackInPlaylistResponse {
+    ActionResponse status = 1;
+}
+
+message RemoveTrackFromPlaylistRequest {
+    int32 playlistTrackId = 1;
+}
+
+message RemoveTrackFromPlaylistResponse {
+    ActionResponse status = 1;
+}
+
+message CreatePlaylistResponse {
+    ActionResponse status = 1;
+    int32 id = 2;
+}
+
+message DeletePlaylistRequest {
+    int32 id = 1;
+}
+
+message DeletePlaylistResponse {
+    ActionResponse status = 1;
+}
+
+message ChangePlaylistRequest {
+    int32 id = 1;
+    optional string title = 2;
+    optional string description = 3;
+}
+
+message PlaylistResponse {
+    int32 id = 1;
+    string title = 2;
+    optional string description = 3;
+    optional string coverSource = 4;
+    int64 createdAt = 5;
+}
+
+message PlaylistDetails {
+    int32 id = 1;
+    string title = 2;
+    string description = 3;
+    string coverSource = 4;
+    int32 createdAt = 5;
+    repeated PlaylistTrack tracks = 6;
+}
+
+message PlaylistTrack {
+    int32 id = 1;
+    Track track = 2;
+    int32 addedBy = 3;
+    int32 addedAt = 4;
+    int32 position = 5;
 }

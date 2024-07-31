@@ -4,7 +4,7 @@ use tokio::sync::RwLock;
 use tonic::{Request, Response, Status};
 use crate::proto::wavenet::library_server::Library;
 use crate::services::library_service::LibraryService;
-use crate::proto::wavenet::{Album, AlbumDetails, ArtistWithAlbums, Empty, GetAlbumRequest, GetAlbumsResponse, GetArtistRequest, GetArtistsResponse, GetTrackRequest, GetTracksResponse, SearchQueryRequest, SearchQueryResponse, Track};
+use crate::proto::wavenet::{Album, AlbumDetails, AlbumTrack, ArtistWithAlbums, Empty, GetAlbumRequest, GetAlbumsResponse, GetArtistRequest, GetArtistsResponse, GetTrackRequest, GetTracksResponse, SearchQueryRequest, SearchQueryResponse, Track};
 use crate::services::search_service::SearchService;
 use crate::wavenet::Artist;
 
@@ -58,14 +58,13 @@ impl Library for LibraryServiceRPC {
             }).collect::<Vec<crate::proto::wavenet::Artist>>(),
             year: album.year,
             blurhash: album.blur_hash.unwrap_or_else(|| "".to_string()),
-            tracks: tracks.iter().map(|track| Track {
+            tracks: tracks.iter().map(|track| AlbumTrack {
                 id: track.id,
                 name: track.title.clone(),
-                album: Option::None,
                 year: track.album.year,
                 artists: vec![],
                 length: track.length
-            }).collect::<Vec<Track>>()
+            }).collect::<Vec<AlbumTrack>>()
         }.to_owned()))
     }
 

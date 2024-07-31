@@ -1,9 +1,10 @@
-use crate::models::album::AlbumModel;
+use crate::models::album::{AlbumModel};
 use crate::models::artist::{ArtistModel};
 use crate::proto::wavenet::Track;
 use crate::wavenet::Album;
 
 
+#[derive(Clone)]
 pub struct TrackModel<'a> {
     pub id: i32,
     pub artist: Vec<ArtistModel>,

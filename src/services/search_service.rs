@@ -1,10 +1,7 @@
 use meilisearch_sdk::client::{Client};
-use serde::Deserialize;
-use meilisearch_sdk::documents::DocumentsResults;
 use meilisearch_sdk::errors::Error;
 use meilisearch_sdk::indexes::Index;
-use meilisearch_sdk::search::{SearchQuery, SearchResults};
-use meilisearch_sdk::settings::Settings;
+use meilisearch_sdk::search::SearchResults;
 use meilisearch_sdk::task_info::TaskInfo;
 use crate::models::meili_models::{MeiliAlbum, MeiliArtist, MeiliTrack};
 
