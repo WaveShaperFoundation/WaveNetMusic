@@ -29,7 +29,7 @@ COPY build.rs ./build.rs
 # RUN apt-get update && apt-get install -y protobuf-compiler
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     --mount=target=/var/cache/apt,type=cache,sharing=locked \
-    --mount=type=cache,target=/usr/local/cargo \
+    --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=target \
     rm -f /etc/apt/apt.conf.d/docker-clean \
     && apt-get update \
