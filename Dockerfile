@@ -32,7 +32,9 @@ COPY mod.rs ./mod.rs
 RUN apt-get update && apt-get install -y protobuf-compiler
 
 # Build the application
-RUN cargo build --release
+RUN --mount=type=cache,target=/usr/local/cargo,from=rust:latest,source=/usr/local/cargo \
+        --mount=type=cache,target=target \
+        cargo build --release
 
 # Use a minimal Alpine image as the base image for the final image
 FROM debian:bookworm-slim
