@@ -25,9 +25,6 @@ COPY proto ./proto
 # Copy build.rs
 COPY build.rs ./build.rs
 
-# Copy mod.rs
-COPY mod.rs ./mod.rs
-
 # Install protobuf
 RUN apt-get update && apt-get install -y protobuf-compiler
 

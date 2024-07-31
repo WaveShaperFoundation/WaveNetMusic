@@ -41,12 +41,10 @@ class _LaunchPageState extends State<LaunchPage> {
     if (_runningAnimationTimer != null) {
       stopCoverAnimation();
     }
-    setState(() {
-      for (var controllerIndex = 1; controllerIndex <= 5; controllerIndex++) {
-        InfiniteScrollController controller = InfiniteScrollController();
-        _controllers.add(controller);
-      }
-    });
+    for (var controllerIndex = 1; controllerIndex <= 5; controllerIndex++) {
+      InfiniteScrollController controller = InfiniteScrollController();
+      _controllers.add(controller);
+    }
     var speed = const Duration(seconds: 4);
     animationCallback() {
       print("Animation callback");
@@ -165,24 +163,6 @@ class _LaunchPageState extends State<LaunchPage> {
                 decoration: InputDecoration(
                   hintText: "Password",
                   border: const OutlineInputBorder(),
-                  suffix: GestureDetector(
-                    child: MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: _showPassword
-                          ? const Icon(Icons.visibility)
-                          : const Icon(Icons.visibility_off),
-                    ),
-                    onTapDown: (_) {
-                      setState(() {
-                        _showPassword = true;
-                      });
-                    },
-                    onTapUp: (_) {
-                      setState(() {
-                        _showPassword = false;
-                      });
-                    },
-                  )
                 ),
                 obscureText: !_showPassword,
               ),
@@ -198,6 +178,7 @@ class _LaunchPageState extends State<LaunchPage> {
                   });
                   waveclient.login(usernameController.text, passwordController.text).then((value) {
                     if(value.isNotEmpty){
+                      stopCoverAnimation();
                       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) {
                         return const HomePage();
                       },));
@@ -319,5 +300,12 @@ class _LaunchPageState extends State<LaunchPage> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    // TODO: implement dispose
+    stopCoverAnimation();
+    super.dispose();
   }
 }

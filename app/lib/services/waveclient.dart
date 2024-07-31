@@ -22,7 +22,8 @@ class WaveClient {
   void changeHost(String host){
     host = host.replaceAll("http://", "");
     host = host.replaceAll("https://", "");
-    host = host.replaceAll("3000","50051");
+    host = host.replaceAll(":3000","");
+    print("New host selected as "+host);
     try {
       this.channel = ClientChannel(host,
           port: 50051,
