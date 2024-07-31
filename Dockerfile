@@ -29,13 +29,13 @@ COPY build.rs ./build.rs
 # RUN apt-get update && apt-get install -y protobuf-compiler
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     --mount=target=/var/cache/apt,type=cache,sharing=locked \
-    --mount=type=cache,target=/usr/local/cargo,from=rust:latest,source=/usr/local/cargo \
-    --mount=type=cache,target=/home/root/workspace/target \
+    --mount=type=cache,target=/usr/local/cargo \
+    --mount=type=cache,target=target \
     rm -f /etc/apt/apt.conf.d/docker-clean \
     && apt-get update \
     && apt-get install -y protobuf-compiler \
     && cargo build --release \
-    && cp /home/root/workspace/target/release/wavenet /usr/local/bin/
+    && cp target/release/wavenet /usr/local/bin/
 
 # Use a minimal Alpine image as the base image for the final image
 FROM debian:bookworm-slim
