@@ -30,11 +30,13 @@ COPY build.rs ./build.rs
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     --mount=target=/var/cache/apt,type=cache,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo,from=rust:latest,source=/usr/local/cargo \
-    --mount=type=cache,target=target \
+    --mount=type=cache,target=/home/root/workspace/target \
+
     rm -f /etc/apt/apt.conf.d/docker-clean \
     && apt-get update \
     && apt-get install -y protobuf-compiler \
-    && cargo build --release
+    && cargo build --release \
+    && cp /home/root/workspace/target/release/wavenet /usr/local/bin/
 
 # Use a minimal Alpine image as the base image for the final image
 FROM debian:bookworm-slim
@@ -51,7 +53,8 @@ ENV MEILISEARCH_KEY=${MEILISEARCH_KEY}
 
 EXPOSE 3000
 # Copy the built binary from the builder stage to the final image
-COPY --from=builder /app/target/release/wavenet .
+# COPY --from=builder /app/target/release/wavenet .
+COPY --from=builder /usr/local/bin/wavenet .
 
 VOLUME ["/library"]
 # Set the entrypoint for the container
