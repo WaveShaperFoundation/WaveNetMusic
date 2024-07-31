@@ -66,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
     // Initialize search service
-    let search_service_arc = Arc::new(RwLock::new(SearchService::new(meilsearch_url.clone(), None).await));
+    let search_service_arc = Arc::new(RwLock::new(SearchService::new(meilsearch_url.clone(), Some(meilsearch_key.clone())).await));
     //search_service.drop_all().await.unwrap(); # Drop all meili entites
 
 
