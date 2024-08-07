@@ -353,6 +353,7 @@ impl LibraryService {
             };
 
             if is_track {
+                log.info(format!("Cursor at {:?}",path.to_str().unwrap_or("no path found")));
                 let tag_result = Tag::new().read_from_path(&path);
                 let tag = match tag_result {
                     Ok(tag) => tag,
