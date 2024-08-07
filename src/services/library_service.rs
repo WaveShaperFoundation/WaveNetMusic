@@ -369,7 +369,7 @@ impl LibraryService {
 
                 let artists_active_models = match tag.artists() {
                     Some(artists) => artists.iter().map(|artist| {
-                        log.info(format!("Now indexing artist {:?} {:?}",*artist.clone(), String::from_utf8_lossy((*artist).as_bytes()).to_string() ));
+                        log.info(format!("Now indexing artist {:?}", String::from_utf8_lossy((*artist).as_bytes()).to_string() ));
                         ArtistActiveModel {
                             id: NotSet,
                             name: Set(String::from_utf8_lossy((*artist).as_bytes()).to_string()),
