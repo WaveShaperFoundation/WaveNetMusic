@@ -353,7 +353,7 @@ impl LibraryService {
             };
 
             if is_track {
-                log.info(format!("Cursor at {:?}",path.to_str().unwrap_or("no path found")));
+                log.info(format!("Cursor at {:?}", path.to_str().unwrap_or("no path found")));
                 let tag_result = Tag::new().read_from_path(&path);
                 let tag = match tag_result {
                     Ok(tag) => tag,
@@ -369,9 +369,10 @@ impl LibraryService {
 
                 let artists_active_models = match tag.artists() {
                     Some(artists) => artists.iter().map(|artist| {
+                        log.info(format!("Now indexing artist {:?} {:?}",*artist.clone(), String::from_utf8_lossy((*artist).as_bytes()).to_string() ));
                         ArtistActiveModel {
                             id: NotSet,
-                            name: Set(String::from(*artist)),
+                            name: Set(String::from_utf8_lossy((*artist).as_bytes()).to_string()),
                         }
                     }).collect::<Vec<ArtistActiveModel>>(),
                     None => vec![],
@@ -437,7 +438,7 @@ impl LibraryService {
                     None => String::from("Unknown"),
                 };
 
-                log.info(format!("Indexing the Track Title {:?} at path {:?}",track_title.clone(),path.clone().to_str().unwrap_or("NOT FOUND AAAA")));
+                log.info(format!("Indexing the Track Title {:?} at path {:?}", track_title.clone(), path.clone().to_str().unwrap_or("NOT FOUND AAAA")));
 
                 let _track_number = match tag.track_number() {
                     Some(track_number) => Set(Some(track_number)),
