@@ -25,6 +25,18 @@ use entity::track::ActiveModel as TrackActiveModel;
 use entity::album::ActiveModel as AlbumActiveModel;
 use crate::models::meili_models::{MeiliAlbum, MeiliArtist, MeiliTrack};
 use crate::services::search_service::SearchService;
+use symphonia::core::codecs::CODEC_TYPE_NULL;
+use symphonia::core::formats::FormatOptions;
+use symphonia::core::formats::Track as SymphoniaTrack;
+use symphonia::core::io::MediaSourceStream;
+use symphonia::core::meta::MetadataOptions;
+use symphonia::core::probe::Hint;
+use symphonia::default::get_probe;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::Path;
+use symphonia::core::units::TimeBase;
+
 
 #[derive(Clone)]
 pub struct LibraryService {
@@ -232,6 +244,43 @@ impl LibraryService {
         Ok(tracks)
     }
 
+    pub fn get_track_length_seconds(&self, file_path: &str) -> Result<i32, String> {
+        // Open the media file.
+        let file = File::open(file_path).map_err(|e| e.to_string())?;
+        let media_source = MediaSourceStream::new(Box::new(file), Default::default());
+
+        // Create a probe.
+        let probe = get_probe();
+        let hint = Hint::new();
+
+        // Use the probe to guess the format.
+        let format = probe
+            .format(&hint, media_source, &FormatOptions::default(), &MetadataOptions::default())
+            .map_err(|e| e.to_string())?;
+
+        // Find the first audio track.
+        let track = format
+            .format.tracks()
+            .iter()
+            .find(|track| track.codec_params.codec != CODEC_TYPE_NULL)
+            .ok_or("No audio track found")?;
+
+        // Get the duration in seconds.
+        let duration = self.track_duration_in_seconds(track)?;
+
+        Ok(duration)
+    }
+
+    fn track_duration_in_seconds(&self, track: &SymphoniaTrack) -> Result<i32, String> {
+        if let Some(time_base) = track.codec_params.time_base {
+            if let Some(n_frames) = track.codec_params.n_frames {
+                let seconds = time_base.calc_time(n_frames).seconds;
+                return Ok(seconds as i32);
+            }
+        }
+        Err("Could not determine duration".into())
+    }
+
     pub async fn get_album(&self, id: i32) -> Result<AlbumModel, WaveError> {
         let connection = self.database_connection.clone();
         let con = connection.read().await;
@@ -385,8 +434,21 @@ impl LibraryService {
 
                 let track_length = match tag.duration() {
                     Some(length) => Set(length as i32),
-                    None => NotSet,
+                    None => {
+                        match self.get_track_length_seconds(path.to_str().unwrap()) {
+                            Ok(seconds) => {
+                                Set(seconds as i32)
+                            }
+                            Err(_) => {
+                                log.error("Could not parse the length of the file");
+                                Set(-1)
+                            }
+                        }
+                    },
                 };
+
+
+
 
                 let _track_album_artist = match tag.album_artists() {
                     Some(artists) => artists.iter().map(|artist| {
@@ -508,6 +570,8 @@ impl LibraryService {
         }
         Ok(String::from("Okay"))
     }
+
+
 
 
     async fn add_artist_to_track(&self, artist_track: ArtistTrackActiveModel) -> Result<ArtistTrackActiveModel, WaveError> {

@@ -1,4 +1,4 @@
-workspace = { members = [".","entity","migration"] }
+workspace = { members = [".", "entity", "migration"] }
 
 
 [package]
@@ -17,7 +17,7 @@ futures = "0.3.30"
 clap = { version = "4.5.11", features = ["derive"] }
 tonic-reflection = "0.12.1"
 tonic-build = "0.12.1"
-sea-orm = { version = "0.12.15", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros" ] }
+sea-orm = { version = "0.12.15", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
 entity = { path = "entity" }
 migration = { path = "migration" } # depends on your needs
 audiotags = "0.5.0"
@@ -27,12 +27,12 @@ mime_guess = "2.0.5"
 tokio-util = { version = "0.7.11", features = ["io"] }
 serde = { version = "1.0.204", features = ["derive"] }
 hyper = "1.4.1"
-tower-http = {version = "0.5.2", features = ["fs","cors"]}
+tower-http = { version = "0.5.2", features = ["fs", "cors"] }
 tonic-web = "0.12.1"
 blurhash = "0.2.3"
-image = {version = "0.25.2", features = ["default","jpeg","png"]}
+image = { version = "0.25.2", features = ["default", "jpeg", "png"] }
 dotenv = { version = "0.15.0", features = ["cli"] }
-meilisearch-sdk = {version = "0.27.0", features = ["default"]}
+meilisearch-sdk = { version = "0.27.0", features = ["default"] }
 serde_json = "1.0.120"
 paris = "1.5.15"
 argon2 = "0.5.3"
@@ -40,6 +40,7 @@ jwt = "0.16.0"
 hmac = "0.12.1"
 sha2 = "0.10.8"
 chrono = "0.4.38"
+symphonia = { version = "0.5.4", features = ["default","all","opt-simd"] }
 
 [build-dependencies]
 tonic-build = "0.12.1"
