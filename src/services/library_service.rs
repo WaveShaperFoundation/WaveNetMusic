@@ -383,7 +383,7 @@ impl LibraryService {
                     let artist_pushing = self.add_active_artist(active_artist).await?;
                     self.search_service.read().await.add_artist(MeiliArtist {
                         id: artist_pushing.id.clone().unwrap(),
-                        name: artist_pushing.name.clone().unwrap(),
+                        name: artist_pushing.name.clone().unwrap().replace("\u{0000}", " "),
                     }).await?;
                     artists.push(artist_pushing);
                 }
@@ -393,7 +393,7 @@ impl LibraryService {
                     Some(artists) => artists.iter().map(|artist| {
                         ArtistActiveModel {
                             id: NotSet,
-                            name: Set(String::from(*artist)),
+                            name: Set(String::from(*artist).replace("\u{0000}", " ")),
                         }
                     }).collect::<Vec<ArtistActiveModel>>(),
                     None => vec![],
