@@ -1,6 +1,15 @@
+import 'dart:io';
+
+import 'package:app/services/audio_handler.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:fast_cached_network_image/fast_cached_network_image.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:grpc/grpc.dart';
+import 'package:just_audio/just_audio.dart';
 
 import '../models/library_models.dart';
 import 'generated/wavenet.pbgrpc.dart';
@@ -12,21 +21,49 @@ class WaveClient {
   late PlaylistClient playlistClient;
   String? authToken;
 
+  String hostName = "wavenet.local";
+  int serverPort = 50051;
+  int streamingPort = 3000;
+
+  WaveAudioHandler? audioHandler;
+
   WaveClient() {
     if (kDebugMode) {
       print("Creating WaveClient");
     }
-    changeHost("192.168.0.65");
+
+    AudioPlayer player = AudioPlayer();
+    AudioService.init(
+      builder: () => WaveAudioHandler(
+          player: player, loaded: true, getTrackById: getTrack),
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'com.wave.net.app',
+        androidNotificationChannelName: 'WaveNet',
+        androidNotificationIcon: 'mipmap/ic_stat_wave_svg_borderless',
+        androidStopForegroundOnPause: true,
+        androidNotificationOngoing: true,
+        androidNotificationChannelDescription:
+            'This is the WaveNet notification media player channel responsible for playing your music',
+      ),
+    ).then(
+      (value) {
+        audioHandler = value;
+      },
+    );
+
+    changeHost(hostName, serverPort, streamingPort);
   }
 
-  void changeHost(String host){
+  void changeHost(String host, int serverPort, int streamingPort) {
     host = host.replaceAll("http://", "");
     host = host.replaceAll("https://", "");
-    host = host.replaceAll(":3000","");
-    print("New host selected as "+host);
+    hostName = host;
+    this.serverPort = serverPort;
+    this.streamingPort = streamingPort;
+    print("New host is $hostName:$serverPort and streaming at :$streamingPort");
     try {
       this.channel = ClientChannel(host,
-          port: 50051,
+          port: serverPort,
           options: const ChannelOptions(
             userAgent: "Windoof",
             credentials: ChannelCredentials.insecure(),
@@ -39,12 +76,17 @@ class WaveClient {
     }
   }
 
+  void setToken(String authToken){
+    this.authToken = authToken;
+  }
+
   Future<String> login(String username, String password) async {
     try {
       var response = await authenticationClient.login(LoginRequest()
         ..username = username
         ..password = password);
-      print("Login response: ${response.token}");
+      print(
+          "Login response: ${response.token} for username ${username} / ${password}");
       authToken = response.token;
       return Future.value(response.token);
     } catch (e) {
@@ -125,5 +167,88 @@ class WaveClient {
     } catch (e) {
       print("Error getting artists: $e");
     }
+  }
+
+  Future<Track> getTrack(int trackId) async {
+    try {
+      var response =
+          await libraryClient.getTrack(GetTrackRequest()..id = trackId);
+      return response;
+      print("Track: ${response.name}");
+    } catch (e) {
+      print("Error getting track: $e");
+      return Future.error(e);
+    }
+  }
+
+  Future<void> addTrackToQueue(int trackId) async {
+    try {
+      var response =
+          await libraryClient.getTrack(GetTrackRequest()..id = trackId);
+      MediaItem mediaItem = MediaItem(
+        id: response.id.toString(),
+        album: response.album.name,
+        title: response.name,
+        artist: response.artists.map((e) => e.name).join(", "),
+        duration: Duration(seconds: response.length.toInt()),
+        artUri: Uri.parse(getAlbumCoverURI(response.album.id)),
+        extras: {
+          "trackId": response.id,
+          "albumId": response.album.id,
+          "streamingLink": getStreamingLink(response.id),
+        },
+      );
+      this.audioHandler?.addQueueItem(mediaItem);
+      print("Added track to queue: ${response.name}");
+    } catch (e) {
+      print("Error adding track to queue: $e");
+    }
+  }
+
+  Future<void> playTrack(int trackId) async {
+    try {
+      var response =
+          await libraryClient.getTrack(GetTrackRequest()..id = trackId);
+      MediaItem mediaItem = MediaItem(
+        id: response.id.toString(),
+        album: response.album.name,
+        title: response.name,
+        artist: response.artists.map((e) => e.name).join(", "),
+        duration: Duration(seconds: response.length.toInt()),
+        artUri: Uri.parse(getAlbumCoverURI(response.album.id)),
+        extras: {
+          "trackId": response.id,
+          "albumId": response.album.id,
+          "streamingLink": getStreamingLink(response.id),
+        },
+      );
+      this.audioHandler?.playWithMediaItem(
+          mediaItem, getStreamingLink(trackId), response.album.id);
+      print("Playing track: ${response.name}");
+    } catch (e) {
+      print("Error playing track: $e");
+    }
+  }
+
+  Future<int> getFilesPort() {
+    return Future.value(3000);
+  }
+
+  NetworkImage getAlbumCoverByTrack(int trackId) {
+    return NetworkImage("http://$hostName:$streamingPort/cover?id=$trackId");
+  }
+
+  String getAlbumCoverURI(int albumId) {
+    return "http://$hostName:$streamingPort/cover?id=$albumId";
+  }
+
+  String getStreamingLink(int trackId) {
+    return "http://$hostName:$streamingPort/song?id=$trackId";
+  }
+
+  FastCachedImageProvider getAlbumCover(int albumId) {
+    return FastCachedImageProvider(
+      getAlbumCoverURI(albumId),
+    );
   }
 }

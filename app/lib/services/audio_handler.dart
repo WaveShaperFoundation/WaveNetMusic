@@ -1,60 +1,51 @@
-import 'dart:io';
-import 'dart:math';
-
 import 'package:app/services/generated/wavenet.pb.dart';
+import 'package:app/services/waveclient.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:smtc_windows/smtc_windows.dart';
 
-class WaveAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
+class WaveAudioHandler extends BaseAudioHandler
+    with QueueHandler, SeekHandler, ChangeNotifier {
   final AudioPlayer player;
-  late final SMTCWindows? smtc;
+
+  MediaItem? currentSong;
+  List<Track>? _songs;
   bool loaded = false;
 
+  int queueIndex = 0;
+  int currentPlayingId = -1;
+  int currentPlayingAlbumId = -1;
+  Future<Track> Function(int trackId) getTrackById;
 
   @override
-  WaveAudioHandler({this.loaded = false, required this.player, required this.smtc}) {
+  WaveAudioHandler(
+      {this.loaded = false, required this.player, required this.getTrackById}) {
     print("Creating audio handler");
-    if (Platform.isWindows && smtc != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        print("add post frame callback");
-        try {
-          // Listen to button events and update playback status accordingly
-          smtc!.buttonPressStream.listen((event) {
-            switch (event) {
-              case PressedButton.play:
-              // Update playback status
-                smtc?.setPlaybackStatus(PlaybackStatus.Playing);
-                break;
-              case PressedButton.pause:
-                smtc?.setPlaybackStatus(PlaybackStatus.Paused);
-                break;
-              case PressedButton.next:
-                print('Next');
-                break;
-              case PressedButton.previous:
-                print('Previous');
-                break;
-              case PressedButton.stop:
-                smtc?.setPlaybackStatus(PlaybackStatus.Stopped);
-                smtc?.disableSmtc();
-                break;
-              default:
-                break;
-            }
-          });
-        } catch (e) {
-          debugPrint("Error: $e");
-        }
-      });
-    }
+
+    player.processingStateStream.listen((state) {
+      if (state == ProcessingState.completed) {
+        print("Song completed skipping to ");
+        print(queue.value.map((e) => e.toString()).join("\n"));
+        skipToNext();
+      }
+      ;
+    });
+
+    player.positionStream.listen(_broadcastPosition);
+    player.playbackEventStream.listen(_broadcastState);
+  }
+
+  void _broadcastPosition(Duration position) {
+    playbackState.add(playbackState.value.copyWith(updatePosition: position));
+  }
+
+  void _broadcastState(PlaybackEvent event) {
+    final playing = player.playing;
+    print("new broadcast says position is at "+player.position.toString());
     playbackState.add(playbackState.value.copyWith(
       controls: [
         MediaControl.skipToPrevious,
-        MediaControl.pause,
-        MediaControl.stop,
-        MediaControl.play,
+        if (playing) MediaControl.pause else MediaControl.play,
         MediaControl.skipToNext,
       ],
       systemActions: const {
@@ -62,6 +53,7 @@ class WaveAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         MediaAction.seekForward,
         MediaAction.seekBackward,
       },
+      androidCompactActionIndices: const [0, 1, 3],
       processingState: const {
         ProcessingState.idle: AudioProcessingState.idle,
         ProcessingState.loading: AudioProcessingState.loading,
@@ -69,23 +61,12 @@ class WaveAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         ProcessingState.ready: AudioProcessingState.ready,
         ProcessingState.completed: AudioProcessingState.completed,
       }[player.processingState]!,
+      playing: playing,
+      updatePosition: player.position,
+      bufferedPosition: player.bufferedPosition,
+      speed: player.speed,
+      queueIndex: queueIndex,
     ));
-    player.processingStateStream.listen((event) {
-      playbackState.add(playbackState.value.copyWith(
-        processingState: const {
-          ProcessingState.idle: AudioProcessingState.idle,
-          ProcessingState.loading: AudioProcessingState.loading,
-          ProcessingState.buffering: AudioProcessingState.buffering,
-          ProcessingState.ready: AudioProcessingState.ready,
-          ProcessingState.completed: AudioProcessingState.completed,
-        }[event]!,
-      ));
-    });
-    player.positionStream.listen((event) {
-      playbackState.add(playbackState.value.copyWith(
-        updatePosition: event,
-      ));
-    });
   }
 
   @override
@@ -129,142 +110,56 @@ class WaveAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               extras: {"action": "like", "songId": 2},
               name: 'like'),
         ],
-
       ));
       print("Liked song ${extras!['songId']}");
-
     }
     return super.customAction(name, extras);
   }
 
-  Future<void> playTrack(Track track) async {
-    print(track);
-
-    if(Platform.isWindows){
-      print("Updating metadata windows smtc");
-      smtc!.updateMetadata(
-        MusicMetadata(
-          title: track.name,
-          album: track.album.name,
-          albumArtist: track.album.artists.join(","),
-          artist: track.album.artists.join(","),
-          thumbnail: 'http://192.168.0.50:3000/cover?id=${track.album.id}',
-        )
-      );
-    }
-
-    this
-        .player
-        .setUrl("http://192.168.0.50:3000/track?id=${track.id}")
-        .then((value) {
-      mediaItem.value = MediaItem(
-        id: track.id.toString(),
-        title: track.name,
-        album: track.album.name,
-        artist: track.album.artists.first.name,
-        duration: Duration(seconds: track.length),
-        rating: Rating.newThumbRating(liked),
-        artUri: Uri.parse(
-          "http://192.168.0.50:3000/cover?id=${track.album.id}",
-        ),
-      );
-      playbackState.add(playbackState.value.copyWith(
-        playing: true,
-        updatePosition: Duration.zero,
-        bufferedPosition: Duration.zero,
-        repeatMode: AudioServiceRepeatMode.none,
-        captioningEnabled: false,
-        shuffleMode: AudioServiceShuffleMode.none,
-        controls: [
-          MediaControl.skipToPrevious,
-          MediaControl.skipToNext,
-          MediaControl.custom(
-              androidIcon: "drawable/thumb_up_outline",
-              label: 'Like',
-              extras: {"action": "like", "songId": 2},
-              name: 'like'),
-        ],
-        androidCompactActionIndices: const [0, 1, 2],
-        processingState: const {
-          ProcessingState.idle: AudioProcessingState.idle,
-          ProcessingState.loading: AudioProcessingState.loading,
-          ProcessingState.buffering: AudioProcessingState.buffering,
-          ProcessingState.ready: AudioProcessingState.ready,
-          ProcessingState.completed: AudioProcessingState.completed,
-        }[player.processingState]!,
-        systemActions: const {
-          MediaAction.custom,
-          MediaAction.seek,
-          MediaAction.setRating,
-        },
-      ));
+  Future<void> playWithMediaItem(
+      MediaItem item, String streamingUrl, int albumId) async {
+    currentPlayingId = int.parse(item.id);
+    currentPlayingAlbumId = albumId;
+    currentSong = item;
+    notifyListeners();
+    this.player.setUrl(streamingUrl).then((value) {
+      this.player.play();
+      mediaItem.value = item;
+      mediaItem.add(item);
     });
   }
 
   @override
   Future<void> playMediaItem(MediaItem item) async {
-    print(item);
-
-    if(Platform.isWindows){
-      print("Updating metadata windows smtc");
-      smtc?.updateMetadata(
-        MusicMetadata(
-          title: item.title,
-          album: item.album,
-          albumArtist: item.artist,
-          artist: item.artist,
-          thumbnail: item.artUri.toString(),
-        )
-      );
-    }
-
-    this.player.setUrl(item.id).then((value) {
+    print("Tryna resolve the media item");
+    currentPlayingId = int.parse(item.id);
+    currentSong = item;
+    notifyListeners();
+    this.player.setUrl(item.extras!["streamingLink"]).then((value) {
       mediaItem.value = item;
       mediaItem.add(item);
-      playbackState.add(playbackState.value.copyWith(
-        playing: true,
-        updatePosition: Duration.zero,
-        bufferedPosition: Duration.zero,
-        repeatMode: AudioServiceRepeatMode.none,
-        captioningEnabled: false,
-        shuffleMode: AudioServiceShuffleMode.none,
-        controls: [
-          MediaControl.skipToPrevious,
-          MediaControl.skipToNext,
-          MediaControl.custom(
-              androidIcon: "drawable/thumb_up_outline",
-              label: 'Like',
-              extras: {"action": "like", "songId": item.id},
-              name: 'like'),
-        ],
-        androidCompactActionIndices: const [0, 1, 2],
-        processingState: const {
-          ProcessingState.idle: AudioProcessingState.idle,
-          ProcessingState.loading: AudioProcessingState.loading,
-          ProcessingState.buffering: AudioProcessingState.buffering,
-          ProcessingState.ready: AudioProcessingState.ready,
-          ProcessingState.completed: AudioProcessingState.completed,
-        }[player.processingState]!,
-        systemActions: const {
-          MediaAction.custom,
-          MediaAction.seek,
-          MediaAction.setRating,
-        },
-      ));
     });
   }
 
-  Future<void> seek(Duration position) => player.seek(position);
-
-  Future<void> skipToQueueItem(int i) => player.seek(Duration.zero, index: i);
-
   @override
-  Future<void> skipToNext() async {
-    print("Skipping to next");
+  Future<void> seek(Duration position) {
+    return player.seek(position);
   }
 
+  @override
+  Future<void> skipToQueueItem(int index) async {
+    print("Skipping to $index");
+    queueIndex = index;
+    if (index < queue.value.length) {
+      await playMediaItem(queue.value[index]);
+    } else {
+      await playMediaItem(queue.value[queue.value.length]);
+    }
+  }
+
+  @override
   void dispose() {
+    super.dispose();
     player.dispose();
-    smtc?.disableSmtc();
   }
 }

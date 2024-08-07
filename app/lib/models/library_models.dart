@@ -17,11 +17,12 @@ class WaveTrack {
   final int id;
   final String name;
   final int length;
-  final WaveAlbum album;
+  final List<WaveArtist> artists;
 
-  WaveTrack( {required this.id,required this.length, required this.name, required this.album});
+  WaveTrack({required this.id,required this.artists, required this.length, required this.name});
 
 }
+
 
 class WavePlaylist {
   final int id;

@@ -38,7 +38,7 @@ dependencies:
   audio_session:
   audio_service: ^0.18.13
   octo_image: ^2.0.0
-  smtc_windows:
+  #smtc_windows:
   cached_network_image:
   flutter_blurhash: ^0.8.2
   palette_generator: ^0.3.3+3
@@ -46,9 +46,22 @@ dependencies:
   bottom_sheet: ^4.0.4
   dynamic_color:
   infinite_carousel: ^1.1.1
+  sqflite:
+  sqflite_common_ffi:
+  path:
+  animations:
+  responsive_grid_list: ^1.4.0
+  flutter_staggered_animations: ^1.1.1
+  flutter_slidable: ^3.1.1
+  text_scroll :
+  fast_cached_network_image:
+  drift:
+  drift_flutter:
+  go_router:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.6
+  shared_preferences: ^2.3.1
 
 dev_dependencies:
   flutter_test:
@@ -60,6 +73,8 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^3.0.0
+  drift_dev:
+  build_runner:
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

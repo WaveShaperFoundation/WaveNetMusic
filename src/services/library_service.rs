@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::ffi::OsStr;
 use std::io::Cursor;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -33,11 +34,11 @@ pub struct LibraryService {
 }
 
 impl LibraryService {
-    pub fn new(database_connection: Arc<RwLock<DatabaseConnection>>, search_service: Arc<RwLock<SearchService>>, library_path:String) -> Self {
+    pub fn new(database_connection: Arc<RwLock<DatabaseConnection>>, search_service: Arc<RwLock<SearchService>>, library_path: String) -> Self {
         Self {
             database_connection,
             search_service,
-            library_path
+            library_path,
         }
     }
 
@@ -280,7 +281,7 @@ impl LibraryService {
 
         let library_path = self.library_path.clone();
         //Iterate through the library path and index all files ending with .flac
-        log.loading(format!("Indexing library at {}",library_path.clone()));
+        log.loading(format!("Indexing library at {}", library_path.clone()));
 
         for entry in WalkDir::new(library_path) {
             let entry = entry.unwrap();
@@ -289,7 +290,20 @@ impl LibraryService {
             }
 
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("flac") {
+            let file_extension = path.extension();
+
+            if (file_extension == None) {
+                continue;
+            }
+
+            let is_track = match file_extension.and_then(|s| s.to_str()) {
+                Some("flac") => true,
+                Some("wav") => true,
+                Some("mp3") => true,
+                _ => false
+            };
+
+            if is_track {
                 let tag_result = Tag::new().read_from_path(&path);
                 let tag = match tag_result {
                     Ok(tag) => tag,
@@ -313,7 +327,7 @@ impl LibraryService {
                 let mut artists = vec![];
                 for active_artist in artists_active_models {
                     let artist_pushing = self.add_active_artist(active_artist).await?;
-                    self.search_service.read().await.add_artist(MeiliArtist{
+                    self.search_service.read().await.add_artist(MeiliArtist {
                         id: artist_pushing.id.clone().unwrap(),
                         name: artist_pushing.name.clone().unwrap(),
                     }).await?;
@@ -333,7 +347,7 @@ impl LibraryService {
                 let mut album_artists = vec![];
                 for active_artist in album_artists_active_models {
                     let artist_pushing = self.add_active_artist(active_artist).await?;
-                    self.search_service.read().await.add_artist(MeiliArtist{
+                    self.search_service.read().await.add_artist(MeiliArtist {
                         id: artist_pushing.id.clone().unwrap(),
                         name: artist_pushing.name.clone().unwrap(),
                     }).await?;
@@ -402,7 +416,7 @@ impl LibraryService {
                     length: track_length,
                     file_location: Set(track_file_location),
                 }).await;
-                
+
 
                 let track = match track {
                     Ok(track) => track,
@@ -413,7 +427,7 @@ impl LibraryService {
                 };
 
 
-                let meili_album = MeiliAlbum{
+                let meili_album = MeiliAlbum {
                     id: album.id.clone().unwrap(),
                     name: album.title.clone().unwrap(),
                     year: tag.year().unwrap_or(0),
@@ -422,18 +436,18 @@ impl LibraryService {
                 let meili_album_add = self.search_service.read().await.add_album(meili_album).await;
                 match meili_album_add {
                     Ok(_) => {
-                       log.success("Added album to search index");
+                        log.success("Added album to search index");
                     }
                     Err(e) => {
                         log.error(format!("[Library] Error adding album to search index: {:?}", e));
                     }
                 }
 
-                let meili_track = MeiliTrack{
+                let meili_track = MeiliTrack {
                     id: track.id.clone().unwrap(),
                     name: track.title.clone().unwrap(),
-                    artist: artists.iter().map(|artist|{
-                        MeiliArtist{
+                    artist: artists.iter().map(|artist| {
+                        MeiliArtist {
                             id: artist.id.clone().unwrap(),
                             name: artist.name.clone().unwrap(),
                         }
@@ -466,7 +480,7 @@ impl LibraryService {
 
                     match artist_track {
                         Ok(result) => {
-                            log.success(format!("Added artist to track {}",result.artist_id.clone().unwrap()));
+                            log.success(format!("Added artist to track {}", result.artist_id.clone().unwrap()));
                         }
                         Err(e) => {
                             log.error(format!("Error adding artist to track: {:?}", e));
@@ -483,7 +497,7 @@ impl LibraryService {
 
                     match artist_album {
                         Ok(result) => {
-                            log.success(format!("Added artist to track {}",result.artist_id.clone().unwrap()));
+                            log.success(format!("Added artist to track {}", result.artist_id.clone().unwrap()));
                         }
                         Err(e) => {
                             log.error(format!("Error adding artist to album: {:?}", e));
@@ -518,7 +532,6 @@ impl LibraryService {
                 track_id: artist_track.track_id.clone(),
             }
         )
-
     }
 
     async fn add_artist_to_album(&self, artist_album: ArtistAlbumActiveModel) -> Result<ArtistAlbumActiveModel, WaveError> {
@@ -577,7 +590,7 @@ impl LibraryService {
         };
 
         Ok(
-            TrackActiveModel{
+            TrackActiveModel {
                 id: Set(insert_id),
                 title: active_model.title.clone(),
                 album: active_model.album.clone(),
@@ -601,7 +614,7 @@ impl LibraryService {
             if let None = album.blur_hash {
                 let album_blur_hash = match picture.clone() {
                     Some(picture) => {
-                        match  self.generate_blurhash(picture).await {
+                        match self.generate_blurhash(picture).await {
                             Ok(blurhash) => Set(Some(blurhash)),
                             Err(e) => {
                                 println!("Error generating blurhash: {:?}", e);
@@ -612,11 +625,11 @@ impl LibraryService {
                     None => {
                         println!("No image provided for blur hash");
                         NotSet
-                    },
+                    }
                 };
 
 
-                let update = Album::update(AlbumActiveModel{
+                let update = Album::update(AlbumActiveModel {
                     id: Set(album.id),
                     title: Set(album_title.clone()),
                     blur_hash: album_blur_hash.clone(),
@@ -643,18 +656,18 @@ impl LibraryService {
 
         let album_blur_hash = match picture {
             Some(picture) => {
-               match  self.generate_blurhash(picture.clone()).await {
-                   Ok(blurhash) => Set(Some(blurhash)),
-                   Err(e) => {
-                       println!("Error generating blurhash: {:?}", e);
-                       NotSet
-                   }
-               }
+                match self.generate_blurhash(picture.clone()).await {
+                    Ok(blurhash) => Set(Some(blurhash)),
+                    Err(e) => {
+                        println!("Error generating blurhash: {:?}", e);
+                        NotSet
+                    }
+                }
             }
             None => {
                 println!("No image provided for blur hash");
                 NotSet
-            },
+            }
         };
 
         let album_active_model = AlbumActiveModel {
@@ -676,8 +689,6 @@ impl LibraryService {
         };
 
 
-
-
         Ok(
             AlbumActiveModel {
                 id: Set(insert_id),
@@ -686,10 +697,9 @@ impl LibraryService {
                 released: active_model.released.clone(),
             }
         )
-
     }
 
-    async fn generate_blurhash(&self, picture: Picture<'_>) -> Result<String,WaveError>{
+    async fn generate_blurhash(&self, picture: Picture<'_>) -> Result<String, WaveError> {
         let img = ImageReader::new(Cursor::new(picture.data)).with_guessed_format();
         let img = if let Ok(img) = img {
             img
@@ -781,9 +791,8 @@ impl LibraryService {
                 }
             }
 
-
             Some(artist) => {
-                self.search_service.read().await.add_artist(MeiliArtist{
+                self.search_service.read().await.add_artist(MeiliArtist {
                     id: artist.id,
                     name: artist.name.clone(),
                 }).await?;

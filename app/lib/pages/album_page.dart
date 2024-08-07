@@ -1,10 +1,12 @@
-import 'package:app/services/audio_handler.dart';
 import 'package:app/services/generated/wavenet.pb.dart';
 import 'package:app/services/waveclient.dart';
+import 'package:app/widgets/album_cover_card.dart';
+import 'package:app/widgets/album_song_tile.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blurhash/flutter_blurhash.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:octo_image/octo_image.dart';
 import 'package:provider/provider.dart';
 
@@ -13,7 +15,8 @@ class AlbumDetailPage extends StatefulWidget {
   final String? albumName;
   final String? blurhash;
 
-  const AlbumDetailPage({super.key, required this.albumId, this.albumName, this.blurhash});
+  const AlbumDetailPage(
+      {super.key, required this.albumId, this.albumName, this.blurhash});
 
   @override
   State<AlbumDetailPage> createState() => _AlbumDetailPageState();
@@ -51,19 +54,134 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth > 600) {
+          return buildDesktop();
+        } else {
+          return buildMobile();
+        }
+      },
+    );
+  }
+
+  Widget buildDesktop() {
+    var waveclient = context.read<WaveClient>();
     var albumName = widget.albumName ?? "Album Name";
     if (album != null) {
       albumName = album!.name;
     }
-    print("http://192.168.0.50:3000/cover?id=${widget.albumId}");
     return Scaffold(
       appBar: AppBar(
-        title: Text(albumName),
+        title: Text("Album Name"),
+        centerTitle: true,
+        elevation: 5,
+      ),
+      body: ListView.custom(
+        childrenDelegate: SliverChildListDelegate(
+          [
+            SizedBox(height: 24),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 48.0),
+                  child: SizedBox(
+                    width: 300,
+                    child: AlbumCoverCard(
+                      albumId: widget.albumId,
+                      blurHash: widget.blurhash,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AnimatedOpacity(
+                          curve: Curves.easeInOutCubicEmphasized,
+                          opacity: album?.artists != null ? 1 : 0,
+                          duration: Duration(milliseconds: 400),
+                          child: Text(
+                            albumName,
+                            style: TextStyle(
+                                fontSize: 64, fontWeight: FontWeight.w500),
+                          )),
+                      AnimatedOpacity(
+                          curve: Curves.easeInOutCubicEmphasized,
+                          opacity: album?.artists != null ? 1 : 0,
+                          duration: Duration(milliseconds: 700),
+                          child: Text(
+                            album?.artists != null
+                                ? (album!.artists.map((e) => e.name).join(", "))
+                                : "loading",
+                            style: TextStyle(
+                                fontSize: 24, fontWeight: FontWeight.w500),
+                          )),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 24),
+            ...buildSongTileList()
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> buildSongTileList() {
+    var waveclient = context.read<WaveClient>();
+    var index = -1;
+    return tracks.map<Widget>((track) {
+      index++;
+      return AnimationConfiguration.staggeredList(
+        position: index,
+        duration: const Duration(milliseconds: 375),
+        child: FadeInAnimation(
+          curve: Curves.easeInOutCubicEmphasized,
+          duration: const Duration(milliseconds: 375),
+          child: SlideAnimation(
+            curve: Curves.easeInOutCubicEmphasized,
+            duration: Durations.medium3,
+            verticalOffset: 5,
+            child: SingleSongTile(
+              key: Key("track-${track.id}"),
+              track: track,
+              songId: track.id,
+              trackNumber: index + 1,
+              songName: track.name,
+              length: Duration(seconds: track.length),
+              onTap: () {
+                waveclient.playTrack(track.id);
+              },
+            ),
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  Widget buildMobile() {
+    var albumName = widget.albumName ?? "";
+    if (album != null) {
+      albumName = album!.name;
+    }
+    print("Albu,m name is now " + albumName);
+    var waveclient = context.read<WaveClient>();
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          albumName,
+          key: ValueKey(albumName),
+        ),
         centerTitle: true,
         elevation: 5,
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: (){},
+        onPressed: () {},
         child: const Icon(Icons.play_arrow),
       ),
       body: ListView(
@@ -75,6 +193,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
               aspectRatio: 1,
               child: Card(
                 elevation: 10,
+                borderOnForeground: true,
                 child: Hero(
                   tag: "album-${widget.albumId}",
                   child: ClipRRect(
@@ -86,22 +205,18 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
                       fadeOutCurve: Curves.easeOut,
                       fadeOutDuration: Duration(milliseconds: 550),
                       errorBuilder: (context, error, stackTrace) {
-                        return Image(
-                          key: Key("album-${widget.albumId}"),
-                          image: BlurHashImage(album!.blurhash),
-                          fit: BoxFit.cover,
-                        );
+                        return Icon(Icons.error);
                       },
-                      image: CachedNetworkImageProvider(
-                          cacheKey: album?.id.toString(),
-                          "http://192.168.0.50:3000/cover?id=${widget.albumId}"),
-                      placeholderBuilder: (context) {
-                        return Image(
-                          key: Key("album-${widget.albumId}"),
-                          image: BlurHashImage(widget.blurhash!),
-                          fit: BoxFit.cover,
-                        );
-                      },
+                      image: waveclient.getAlbumCover(widget.albumId),
+                      placeholderBuilder: widget.blurhash != null
+                          ? (context) {
+                              return Image(
+                                key: Key("album-${widget.albumId}"),
+                                image: BlurHashImage(widget.blurhash!),
+                                fit: BoxFit.fill,
+                              );
+                            }
+                          : null,
                     ),
                   ),
                 ),
@@ -116,41 +231,21 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
 
   List<Widget> buildTrackTiles() {
     int index = 1;
+    var waveclient = context.read<WaveClient>();
     return tracks.map<Widget>((e) {
       Duration duration = Duration(seconds: e.length);
       //return TrackListTile(track: e, index: index++,);
-      return ListTile(
-        title: Text(
-          "$index. ${e.name}",
-          style: TextStyle(fontSize: 18),
-        ),
-        onTap: () {
-          int trackId = e.id;
-          String url = "http://192.168.0.50:3000/song?id=$trackId";
-          print("Albumname is " + e.album.name);
 
-          var waveAudioHandler = context.read<WaveAudioHandler>();
-          waveAudioHandler.playMediaItem(MediaItem(
-            id: url,
-            title: e.name,
-            genre: "Dubstep",
-            artist: album?.artists.first.name ?? "No artist name found",
-            duration: Duration(seconds: e.length),
-            album: widget.albumName,
-            artUri: Uri.parse(
-                "http://192.168.0.50:3000/cover?id=${widget.albumId}"),
-          ));
-
-          waveAudioHandler.play();
-        },
-        trailing: Text(
-          "${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}",
-          style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w500,
-              fontSize: 16),
-        ),
-      );
+      return SingleSongTile(
+          key: Key("track-${e.id}"),
+          songId: e.id,
+          trackNumber: index++,
+          songName: e.name,
+          length: Duration(seconds: e.length),
+          track: e,
+          onTap: () {
+            waveclient.playTrack(e.id);
+          });
     }).toList();
   }
 }

@@ -1,8 +1,9 @@
 import 'package:app/models/library_models.dart';
+import 'package:app/pages/playlist_detail_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../services/waveclient.dart';
+import '../../services/waveclient.dart';
 
 class MyPlaylistPage extends StatefulWidget {
   const MyPlaylistPage({super.key});
@@ -17,7 +18,6 @@ class _MyPlaylistPageState extends State<MyPlaylistPage> {
 
   @override
   void initState() {
-    // TODO: implement initState
     var waveclient = context.read<WaveClient>();
     waveclient.getMyPlaylists().then((value) {
       setState(() {
@@ -34,7 +34,12 @@ class _MyPlaylistPageState extends State<MyPlaylistPage> {
         return ListTile(
           title: Text(e.title),
           subtitle: e.description.isNotEmpty?Text(e.description):null,
-          leading: Icon(Icons.playlist_play_rounded),
+          leading: const Icon(Icons.playlist_play_rounded),
+          onTap: () {
+            Navigator.push(context, MaterialPageRoute(builder: (context) {
+              return PlaylistDetailPage(playlistId: e.id, playlistTitle: e.title, playlistDescription: e.description);
+            },));
+          }
         );
       },).toList(),
     );

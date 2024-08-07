@@ -31,22 +31,18 @@ impl Authentication for AuthenticationServiceRPC {
         let username = request_inner.username.clone();
         let password = request_inner.password.clone();
         let authentication_service = self.authentication_service.read().await;
-        let user = authentication_service.authenticate_credentials(username, password).await.unwrap();
+        let user = authentication_service.authenticate_credentials(username, password).await;
+
         match user {
-            Some(user) => {
+            Ok(user) => {
                 let token = authentication_service.create_token(user).await.unwrap();
                 let x = LoginResponse {
-                    status: 1,
                     token: Some(token),
                 };
                 Ok(Response::new(x))
             },
-            None => {
-                let x = LoginResponse {
-                    status: 0,
-                    token: None,
-                };
-                Ok(Response::new(x))
+            Err(error) => {
+                Err(Status::unauthenticated(error.message.clone()))
             }
         }
     }

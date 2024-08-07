@@ -1,9 +1,10 @@
+import 'package:app/services/waveclient.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import 'package:text_scroll/text_scroll.dart';
 import '../pages/now_playing_page.dart';
-import '../services/audio_handler.dart';
 import 'package:bottom_sheet/bottom_sheet.dart';
 
 class PlayerIsland extends StatefulWidget {
@@ -13,89 +14,150 @@ class PlayerIsland extends StatefulWidget {
   State<PlayerIsland> createState() => _PlayerIslandState();
 }
 
-class _PlayerIslandState extends State<PlayerIsland> {
+class _PlayerIslandState extends State<PlayerIsland>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      value: 1.0,
+      vsync: this,
+    );
+
+    var audioHandler = context.read<WaveClient>().audioHandler;
+    if (audioHandler != null) {
+      if (audioHandler.playbackState.value.playing) {
+        _controller.forward();
+      } else {
+        _controller.reverse();
+      }
+      audioHandler.playbackState.stream.listen((playbackState) {
+        if (playbackState.playing) {
+          _controller.forward();
+        } else {
+          _controller.reverse();
+        }
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    var audioHandler = context.read<WaveAudioHandler>();
-    return StreamBuilder(
-        stream: audioHandler.mediaItem.stream,
-        builder: (context, snapshot) {
-          return Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: GestureDetector(
-              onTap: () {
-                showFlexibleBottomSheet(
-                  minHeight: 0,
-                  initHeight: 1,
-                  maxHeight: 1,
-                  anchors: [0,1],
-                  isCollapsible: true,
-                  context: context,
-                  isSafeArea: true,
-                  builder: (context, scrollController, bottomSheetOffset) {
-                    return NowPlayingPage(scrollController: scrollController,);
-                  },
-                  isExpand: true,
-                );
-                return;
+    var waveclient = context.read<WaveClient>();
+    var audioHandler = context.read<WaveClient>().audioHandler;
+    if (audioHandler == null) return Container();
 
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+          onTap: () {
+            showFlexibleBottomSheet(
+              minHeight: 0,
+              initHeight: 1,
+              maxHeight: 1,
+              anchors: [0, 1],
+              isCollapsible: true,
+              context: context,
+              isSafeArea: true,
+              builder: (context, scrollController, bottomSheetOffset) {
+                return NowPlayingPage(
+                  scrollController: scrollController,
+                );
               },
-              child: Card(
-                child: Row(
-                  children: [
-                    audioHandler.mediaItem.value?.artUri != null
-                        ? Image(
-                            height: 60,
-                            isAntiAlias: true,
-                            filterQuality: FilterQuality.high,
-                            image: CachedNetworkImageProvider(
-                                (audioHandler.mediaItem.value?.artUri ??
-                                        "No User")
-                                    .toString()))
-                        : Container(),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 8.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              (audioHandler.mediaItem.value?.title ??
-                                  "No Title"),
-                              textAlign: TextAlign.start,
-                              style: Theme.of(context).textTheme.labelLarge,
+              isExpand: true,
+            );
+            return;
+          },
+          child: Card(
+              elevation: 10,
+              borderOnForeground: true,
+              semanticContainer: true,
+              clipBehavior: Clip.antiAlias,
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              child: StreamBuilder<MediaItem?>(
+                  stream: audioHandler.mediaItem.stream,
+                  builder: (context, snapshot) {
+                    return Row(
+                      children: [
+                        audioHandler.mediaItem.value?.artUri != null
+                            ? Image(
+                                height: Theme.of(context)
+                                        .floatingActionButtonTheme
+                                        .smallSizeConstraints
+                                        ?.maxHeight ??
+                                    60,
+                                isAntiAlias: true,
+                                filterQuality: FilterQuality.high,
+                                image: waveclient.getAlbumCover(audioHandler
+                                    .mediaItem.value!.extras!["albumId"]),
+                              )
+                            : SizedBox(
+                                height: Theme.of(context)
+                                        .floatingActionButtonTheme
+                                        .smallSizeConstraints
+                                        ?.maxHeight ??
+                                    60,
+                              ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 8.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                TextScroll(
+                                  delayBefore: Duration(seconds: 2),
+                                  intervalSpaces: 10,
+                                  pauseBetween: Duration(seconds: 1),
+                                  mode: TextScrollMode.endless,
+                                  velocity: Velocity(pixelsPerSecond: Offset(50, 0)),
+                                  (audioHandler.mediaItem.value?.title ??
+                                      "No Title"),
+                                  textAlign: TextAlign.start,
+                                  style: Theme.of(context).textTheme.labelLarge!.copyWith(
+                                    color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                  ),
+                                ),
+                                TextScroll(
+                                  delayBefore: Duration(seconds: 2),
+                                  intervalSpaces: 60,
+                                  pauseBetween: Duration(seconds: 1),
+                                  mode: TextScrollMode.endless,
+                                  velocity: Velocity(pixelsPerSecond: Offset(50, 0)),
+                                  (audioHandler.mediaItem.value?.artist ??
+                                      "No Artist"),
+                                  textAlign: TextAlign.start,
+                                  style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                                    color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                  ),
+                                ),
+                              ],
                             ),
-                            Text(
-                              (audioHandler.mediaItem.value?.artist ??
-                                  "No Artist"),
-                              textAlign: TextAlign.start,
-                              style: Theme.of(context).textTheme.labelMedium,
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                    IconButton(
-                        onPressed: () {
-                          if (audioHandler.playbackState.value.playing) {
-                            audioHandler.pause();
-                          } else {
-                            audioHandler.play();
-                          }
-                          setState(() {});
-                        },
-                        icon: Icon(
-                          audioHandler.playbackState.value.playing
-                              ? Icons.pause
-                              : Icons.play_arrow,
-                          size: 32,
-                        ))
-                  ],
-                ),
-              ),
-            ),
-          );
-        });
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: IconButton(
+                              onPressed: () {
+                                if (audioHandler.playbackState.value.playing) {
+                                  audioHandler.pause();
+                                } else {
+                                  audioHandler.play();
+                                }
+                                setState(() {});
+                              },
+                              icon: AnimatedIcon(
+                                icon: AnimatedIcons.play_pause,
+                                progress: _controller,
+                                size: 32,
+                              )),
+                        )
+                      ],
+                    );
+                  }))),
+    );
   }
 }

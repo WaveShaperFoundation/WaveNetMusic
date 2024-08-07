@@ -33,7 +33,7 @@ impl AuthenticationService {
         }
     }
 
-    pub async fn authenticate_credentials(&self, username: String, password: String) -> Result<Option<WaveUser>,WaveError> {
+    pub async fn authenticate_credentials(&self, username: String, password: String) -> Result<WaveUser,WaveError> {
         let connection = self.database_connection.clone();
         let con = connection.read().await;
         let password_input_bytes = password.as_bytes();
@@ -46,21 +46,21 @@ impl AuthenticationService {
 
         let user_instance = match user {
             Some(user) => user,
-            None => return Ok(Option::None)
+            None => return Err(WaveError::new("User could not be found"))
         };
 
         let argon2 = Argon2::default();
         let password_hash = match PasswordHash::new(user_instance.password_hash.as_str()) {
             Ok(password_hash) => password_hash,
-            Err(_) => return Err(WaveError::new("Failed to hash password"))
+            Err(_) => return Err(WaveError::new("Failed to verify password"))
         };
 
         let authenticated = argon2.verify_password(password_input_bytes, &password_hash).is_ok();
 
         if authenticated {
-            Ok(Some(WaveUser::new(user_instance.id, user_instance.user_name, user_instance.public_name, user_instance.email, user_instance.password_hash, user_instance.role_level)))
+            Ok(WaveUser::new(user_instance.id, user_instance.user_name, user_instance.public_name, user_instance.email, user_instance.password_hash, user_instance.role_level))
         } else {
-            Ok(Option::None)
+            Err(WaveError::new("Wrong credentials provided"))
         }
     }
 

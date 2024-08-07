@@ -45,17 +45,36 @@ pub async fn retrieve_album_cover(
             return Err((StatusCode::NOT_FOUND, "Cover not found".to_string()));
         }
     };
-    let path = path.join("Cover.jpg");
-    let mime = mime_guess::from_path(path.clone()).first_or_octet_stream();
-    req.headers_mut().insert(
-        header::CONTENT_TYPE,
-        mime.as_ref().parse().unwrap(),
-    );
+    let cover_path = path.join("Cover.jpg");
+    let cover_small_path = path.join("AlbumArtSmall.jpg");
+
+    match cover_path.exists() {
+        true => {
+            let mime = mime_guess::from_path(cover_path.clone()).first_or_octet_stream();
+            req.headers_mut().insert(
+                header::CONTENT_TYPE,
+                mime.as_ref().parse().unwrap(),
+            );
+
+            let serve_future = ServeFile::new(cover_path).call(req);
+
+            Ok(serve_future.await.into_response())
+        }
+        false => {
+            let mime = mime_guess::from_path(cover_small_path.clone()).first_or_octet_stream();
+            req.headers_mut().insert(
+                header::CONTENT_TYPE,
+                mime.as_ref().parse().unwrap(),
+            );
 
 
-    let serve_future = ServeFile::new(path).call(req);
+            let serve_future = ServeFile::new(cover_small_path).call(req);
 
-    Ok(serve_future.await.into_response())
+            Ok(serve_future.await.into_response())
+        }
+    }
+
+
 }
 
 pub async fn stream_audio_file(

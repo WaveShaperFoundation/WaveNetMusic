@@ -1,4 +1,5 @@
 import 'package:app/services/generated/wavenet.pb.dart';
+import 'package:app/services/waveclient.dart';
 import 'package:flutter/material.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:provider/provider.dart';
@@ -38,8 +39,8 @@ class _TrackListTileState extends State<TrackListTile> {
     );
   }
 
-  void onTap(){
-    WaveAudioHandler audioHandler = context.read<WaveAudioHandler>();
-    audioHandler.playTrack(widget.track);
+  void onTap() {
+    var waveclient = context.read<WaveClient>();
+    waveclient.playTrack(widget.track.id);
   }
 }

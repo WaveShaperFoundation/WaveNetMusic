@@ -24,7 +24,7 @@ use migration::{Migrator, MigratorTrait};
 use serde::Deserialize;
 use tokio::io::AsyncReadExt;
 use tonic::codegen::Service;
-use tonic_web::GrpcWebLayer;
+use tonic_web::{CorsGrpcWeb, GrpcWebLayer, GrpcWebService};
 use crate::proto::wavenet::authentication_server::{AuthenticationServer};
 use crate::proto::auth_proto::AuthenticationServiceRPC;
 use crate::services::library_service::LibraryService;
@@ -35,8 +35,10 @@ use crate::proto::wavenet::playlist_server::PlaylistServer;
 use crate::routes::axum_routes::{retrieve_album_cover, stream_audio_file};
 use dotenv::dotenv;
 use std::env;
+use axum::http::{HeaderName, Method};
 use crate::services::search_service::SearchService;
 use paris::Logger;
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use crate::services::playlist_service::PlaylistManagementService;
 
 #[derive(Clone)]
@@ -119,13 +121,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
     });
 
-    log.info(format!("Tonic grPC is running at port {}",grpc_port.clone()));
+
+
+    let cors_grpc = tonic_web::GrpcWebLayer::new();
+
+    let cors = tower_http::cors::CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PUT, Method::PATCH, Method::OPTIONS])
+        .allow_origin(Any);
+
+
+    log.info(format!("WaveNet API is running at port {}",grpc_port.clone()));
     Server::builder()
         .accept_http1(true)
+        .layer(cors_grpc)
         .layer(GrpcWebLayer::new())
         .add_service(reflection_server)
-        .add_service(auth_server)
-        .add_service(playlist_server)
+        .add_service(tonic_web::enable(auth_server))
+        .add_service(tonic_web::enable(playlist_server))
         .add_service(tonic_web::enable(library_server))
         .serve(addr)
         .await?;
