@@ -412,7 +412,7 @@ impl LibraryService {
 
                 log.info("Indexing album name");
                 let album_name = match tag.album() {
-                    Some(album) => String::from(album.title),
+                    Some(album) => String::from(album.title).replace("\u{0000}", " "),
                     None => String::from("Unknown"),
                 };
 
@@ -434,7 +434,7 @@ impl LibraryService {
                 let album_active_model = album.clone().into_active_model();
 
                 let track_title = match tag.title() {
-                    Some(title) => String::from(title),
+                    Some(title) => String::from(title).replace("\u{0000}", " "),
                     None => String::from("Unknown"),
                 };
 
@@ -465,7 +465,7 @@ impl LibraryService {
                     Some(artists) => artists.iter().map(|artist| {
                         ArtistActiveModel {
                             id: NotSet,
-                            name: Set(String::from(*artist)),
+                            name: Set(String::from(*artist).replace("\u{0000}", " ")),
                         }
                     }).collect::<Vec<ArtistActiveModel>>(),
                     None => vec![],
