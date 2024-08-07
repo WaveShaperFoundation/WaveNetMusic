@@ -358,6 +358,7 @@ impl LibraryService {
                     Ok(tag) => tag,
                     Err(e) => {
                         log.error(format!("[Library] Error reading tag: {:?}", e));
+                        continue;
                         return Err(WaveError::string(e.to_string()));
                     }
                 };
