@@ -372,7 +372,7 @@ impl LibraryService {
                         log.info(format!("Now indexing artist {:?}", String::from_utf8_lossy((*artist).as_bytes()).to_string() ));
                         ArtistActiveModel {
                             id: NotSet,
-                            name: Set(String::from_utf8_lossy((*artist).as_bytes()).to_string()),
+                            name: Set(String::from(*artist).replace("\u{0000}", "")),
                         }
                     }).collect::<Vec<ArtistActiveModel>>(),
                     None => vec![],
