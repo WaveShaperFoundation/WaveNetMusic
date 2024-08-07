@@ -365,6 +365,7 @@ impl LibraryService {
                 };
 
 
+                log.info("Indexing artists");
 
                 let artists_active_models = match tag.artists() {
                     Some(artists) => artists.iter().map(|artist| {
@@ -386,6 +387,7 @@ impl LibraryService {
                     artists.push(artist_pushing);
                 }
 
+                log.info("Indexing album artists");
                 let album_artists_active_models = match tag.artists() {
                     Some(artists) => artists.iter().map(|artist| {
                         ArtistActiveModel {
@@ -406,16 +408,21 @@ impl LibraryService {
                     album_artists.push(artist_pushing);
                 }
 
+
+                log.info("Indexing album name");
                 let album_name = match tag.album() {
                     Some(album) => String::from(album.title),
                     None => String::from("Unknown"),
                 };
 
+
+                log.info("Indexing album year");
                 let album_year = match tag.year() {
                     Some(year) => Set(Some(year)),
                     None => NotSet,
                 };
 
+                log.info("Indexing album");
                 let album = self.add_active_album(AlbumActiveModel {
                     id: NotSet,
                     title: Set(album_name),
