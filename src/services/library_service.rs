@@ -364,6 +364,7 @@ impl LibraryService {
                 };
 
 
+
                 let artists_active_models = match tag.artists() {
                     Some(artists) => artists.iter().map(|artist| {
                         ArtistActiveModel {
@@ -428,6 +429,8 @@ impl LibraryService {
                     None => String::from("Unknown"),
                 };
 
+                log.info(format!("Indexing the Track Title {:?} at path {:?}",track_title.clone(),path.clone().to_str().unwrap_or("NOT FOUND AAAA")));
+
                 let _track_number = match tag.track_number() {
                     Some(track_number) => Set(Some(track_number)),
                     None => NotSet,
@@ -438,6 +441,7 @@ impl LibraryService {
                     None => {
                         match self.get_track_length_seconds(path.to_str().unwrap()) {
                             Ok(seconds) => {
+                                log.info(format!("Calculated length of song via symphfonia {:?}", seconds));
                                 Set(seconds as i32)
                             }
                             Err(_) => {
@@ -445,11 +449,8 @@ impl LibraryService {
                                 Set(-1)
                             }
                         }
-                    },
+                    }
                 };
-
-
-
 
                 let _track_album_artist = match tag.album_artists() {
                     Some(artists) => artists.iter().map(|artist| {
@@ -460,7 +461,6 @@ impl LibraryService {
                     }).collect::<Vec<ArtistActiveModel>>(),
                     None => vec![],
                 };
-
 
                 let track_file_location = match path.to_str() {
                     None => {
@@ -499,7 +499,7 @@ impl LibraryService {
                 let meili_album_add = self.search_service.read().await.add_album(meili_album).await;
                 match meili_album_add {
                     Ok(_) => {
-                        log.success("Added album to search index");
+                        //log.success("Added album to search index");
                     }
                     Err(e) => {
                         log.error(format!("[Library] Error adding album to search index: {:?}", e));
@@ -527,7 +527,7 @@ impl LibraryService {
                 let meili_add = self.search_service.read().await.add_track(meili_track).await;
                 match meili_add {
                     Ok(_) => {
-                        log.success("Added track to search index");
+                        //log.success("Added track to search index");
                     }
                     Err(e) => {
                         log.error(format!("Error adding track to search index: {:?}", e));
@@ -567,12 +567,12 @@ impl LibraryService {
                         }
                     }
                 }
+
+                log.info(format!("Finished tracking the track {:?}", path.to_str().unwrap_or("No file url found")));
             }
         }
         Ok(String::from("Okay"))
     }
-
-
 
 
     async fn add_artist_to_track(&self, artist_track: ArtistTrackActiveModel) -> Result<ArtistTrackActiveModel, WaveError> {
