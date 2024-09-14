@@ -24,7 +24,12 @@ jobs:
       - name: Get the release version from the tag
         shell: bash
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-
+      
+      - name: Installing gRPC building libraries
+        uses: eWaterCycle/setup-grpc@v5
+        with:
+          grpc-version: 1.51.1
+      
       - name: Install Rust
         # Or @nightly if you want
         uses: dtolnay/rust-toolchain@stable
