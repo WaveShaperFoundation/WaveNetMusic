@@ -29,7 +29,12 @@ jobs:
         uses: eWaterCycle/setup-grpc@v5
         with:
           grpc-version: 1.51.1
-      
+
+      - name: Install musl-tools
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: musl-tools # provides musl-gcc
+          
       - name: Install Rust
         # Or @nightly if you want
         uses: dtolnay/rust-toolchain@stable
