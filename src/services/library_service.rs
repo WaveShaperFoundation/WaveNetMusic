@@ -1,14 +1,16 @@
+use futures::stream::FuturesUnordered;
+use std::collections::HashMap;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::io::Cursor;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 use audiotags::{Picture, Tag};
 use blurhash::encode;
-use image::{EncodableLayout, GenericImageView};
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, NotSet, QueryFilter};
+use image::{EncodableLayout, GenericImageView, ImageResult};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, DatabaseTransaction, DbErr, EntityOrSelect, EntityTrait, IntoActiveModel, JoinType, NotSet, PaginatorTrait, QueryFilter, QuerySelect, RelationTrait, RuntimeErr, TransactionTrait};
 use sea_orm::ActiveValue::Set;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock, Semaphore};
 use entity::{album, artist, artist_album, artist_track, track};
 use walkdir::WalkDir;
 use entity::prelude::{Album, ArtistTrack, Track};
@@ -17,8 +19,8 @@ use crate::models::artist::ArtistModel;
 use crate::models::error::WaveError;
 use crate::models::track::TrackModel;
 use image::io::Reader as ImageReader;
-use paris::Logger;
-use entity::artist::{ActiveModel as ArtistActiveModel, ActiveModel};
+use paris::{Logger};
+use entity::artist::{ActiveModel as ArtistActiveModel, ActiveModel, Model};
 use entity::artist_album::ActiveModel as ArtistAlbumActiveModel;
 use entity::artist_track::ActiveModel as ArtistTrackActiveModel;
 use entity::track::ActiveModel as TrackActiveModel;
@@ -28,15 +30,21 @@ use crate::services::search_service::SearchService;
 use symphonia::core::codecs::CODEC_TYPE_NULL;
 use symphonia::core::formats::FormatOptions;
 use symphonia::core::formats::Track as SymphoniaTrack;
-use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
+use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
+use symphonia::core::meta::{MetadataOptions, MetadataRevision, StandardTagKey, Value};
 use symphonia::core::probe::Hint;
 use symphonia::default::get_probe;
 use std::fs::File;
+use std::borrow::BorrowMut;
+use std::future::Future;
 use std::io::BufReader;
+use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use symphonia::core::units::TimeBase;
-
+use std::borrow::Borrow;
+use tokio::io::AsyncWriteExt;
+use tokio::task::JoinHandle;
+use tokio_stream::StreamExt;
 
 #[derive(Clone)]
 pub struct LibraryService {
@@ -325,6 +333,452 @@ impl LibraryService {
         }
     }
 
+    async fn run_limited_tasks(handles: Vec<tokio::task::JoinHandle<()>>, limit: usize) {
+        let mut futures_unordered = FuturesUnordered::new();
+
+        // Loop through all task handles
+        for handle in handles.into_iter() {
+            // Push task into the futures unordered set
+            futures_unordered.push(handle);
+
+            // Check if we have reached the limit
+            if futures_unordered.len() >= limit {
+                // Wait for one of the tasks to finish before adding new tasks
+                futures_unordered.next().await;
+            }
+        }
+
+        // Await remaining tasks in the unordered set
+        while let Some(_) = futures_unordered.next().await {
+            // All remaining tasks will be awaited
+        }
+    }
+
+    pub async fn scan_library(&self) -> Result<(i32, i32, i32), WaveError> {
+        let mut logger = Logger::new();
+        let connection = self.database_connection.read().await;
+        let started_instant = Instant::now();
+        logger.info(format!("Starting indexing"));
+
+        // Create stats variables
+        let mut tracks_scanned = 0;
+        let mut tracks_added = 0;
+        let mut tracks_skipped = 0;
+
+        // Start database transaction
+        let mut transaction_db = match connection.begin().await {
+            Ok(transaction) => transaction,
+            Err(error) => {
+                return Err(WaveError::string(error.to_string()))
+            }
+        };
+
+        let trans_mut: Arc<&DatabaseTransaction> = Arc::new(&transaction_db);
+
+        let paths = WalkDir::new(self.library_path.clone());
+
+        let mut task_handles: Vec<JoinHandle<_>> = Vec::new();
+
+        let self_arc = self.clone(); // Create an Arc clone of self
+
+        let semaphore = Arc::new(Semaphore::new(8));
+
+        for path in paths {
+            let path = match path {
+                Ok(path) => path,
+                Err(error) => {
+                    return Err(WaveError::string(error.to_string()))
+                }
+            };
+            if !path.file_type().is_file() {
+                continue;
+            }
+            let extension = match path.path().extension().and_then(|e| e.to_str()) {
+                Some("mp3") => "mp3",
+                Some("flac") => "flac",
+                Some("ogg") => "ogg",
+                Some("wav") => "wav",
+                _ => {
+                    continue;
+                }
+            };
+
+            let task_queue = Arc::new(RwLock::<Vec<String>>::new(vec![]));
+
+
+            let database_arc_lock = Arc::new(Mutex::new(connection.clone()));
+            let self_clone = self_arc.clone(); // Clone the Arc for each task
+
+            let semaphore_clone = semaphore.clone(); // Clone the semaphore
+
+            let task_handle = tokio::spawn(async move {
+                let mut logger = Logger::new();
+                let _permit = semaphore_clone.acquire().await; // Acquire semaphore permit
+
+                let metadata = match self_clone.extract_metadata(path.clone().path()) {
+                    Ok(metadata) => metadata,
+                    Err(error) => {
+                        logger.error(error.to_string());
+                        tracks_skipped += 1;
+                        return ();
+                    }
+                };
+
+                if metadata.artworks.first().is_some() {
+                    let artwork_instance = metadata.artworks.first().unwrap();
+                    let artwork_md5 = md5::compute(artwork_instance.data.clone());
+
+
+                    let path = format!("{}\\Cover.jpg", path.clone().path().parent().unwrap().to_str().unwrap());
+
+                    println!("{}", path.clone());
+
+                    let database_clone = database_arc_lock.clone();
+                    let binding = database_clone.lock().await;
+                    let database_lock = binding.deref();
+
+                    let artwork = entity::artwork::Entity::find()
+                        .filter(
+                            entity::artwork::Column::FileLocation.eq(format!("{}",path.clone()))
+                        )
+                        .one(database_lock)
+                        .await;
+
+                    let artwork_track: Option<entity::artwork::Model> = match artwork {
+                        Ok(artwork_model) => {
+                            match artwork_model {
+                                None => {
+                                    let artwork_hash = format!("{:x}", artwork_md5.clone());
+                                    logger.info(format!("No artwork found for {:?} {:?} in the database ", metadata.title, metadata.album));
+                                    let image_blurhash = self_clone.generate_blur_hash_from_u8(artwork_instance).await;
+                                    let artwork_new = entity::artwork::ActiveModel {
+                                        id: Default::default(),
+                                        file_location: Set(path.clone()),
+                                        blur_hash: Set(Some(image_blurhash.unwrap_or(" ".parse().unwrap()))),
+                                        image_hash: Set(Some(artwork_hash.clone())),
+                                    };
+                                    match artwork_new.insert(database_lock).await {
+                                        Ok(artwork_saved) => {
+                                            logger.info(format!("Saving image to database and fs {}", path.clone()));
+                                            let image = image::load_from_memory(&*artwork_instance.data.clone());
+                                            let image_saved = match image {
+                                                Ok(image) => {
+                                                    match image.save(path.clone()) {
+                                                        Ok(_) => {
+                                                            logger.info(format!("Saved image to {}", path.clone()));
+                                                        }
+                                                        Err(error) => {
+                                                            logger.error(format!("Error saving image {}", path.clone()));
+                                                        }
+                                                    }
+                                                }
+                                                Err(_) => {
+                                                    logger.error("Error creating Image file");
+                                                }
+                                            };
+                                            Some(artwork_saved)
+                                        }
+                                        Err(error) => {
+                                            logger.info(format!("Error inserting data for {:?} {:?} in the database, {}", metadata.title, metadata.album, error.to_string()));
+                                            None
+                                        }
+                                    }
+                                }
+                                Some(artwork) => {
+                                    logger.info(format!("Artwork already exists for {:?} {:?} in the database ", metadata.title, metadata.album));
+                                    Some(artwork)
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            logger.info(format!("Error retrieving artwork of {:?} {:?} {}",metadata.title, metadata.album,error.to_string()));
+                            None
+                        }
+                    };
+                    drop(database_lock)
+                }
+
+
+
+                let database_clone = database_arc_lock.clone();
+                let binding = database_clone.lock().await;
+                let database_lock = binding.deref();
+
+                let binding = path.clone().into_path();
+                let path_str = binding.to_str().unwrap();
+
+                let song_indexed = track::Entity::find()
+                    .filter(
+                        track::Column::FileLocation.eq(path_str)
+                    ).count(database_lock).await;
+
+                match song_indexed {
+                    Ok(count) => {
+                        if count >= 1 {
+                            logger.info(format!("Skipping song at {:?}", path.clone()));
+                            return;
+                        }
+                    }
+                    Err(error) => {
+                        logger.error(format!("Database error when checking existence of song {}", error.to_string()));
+                        return;
+                    }
+                }
+
+
+
+
+
+
+
+
+                let mut artists = vec![];
+
+                match metadata.artist {
+                    None => {}
+                    Some(artists_vec) => {
+                        for artist_value in artists_vec {
+                            let artist = match entity::artist::Entity::find()
+                                .filter(
+                                    artist::Column::Name.contains(artist_value.clone())
+                                ).one(database_lock)
+                                .await {
+                                Ok(artist) => {
+                                    match artist {
+                                        None => {
+                                            let artist_new = ActiveModel {
+                                                id: NotSet,
+                                                name: Set(artist_value.clone()),
+                                            };
+                                            match artist_new.insert(database_lock).await {
+                                                Ok(artist_added) => artist_added,
+                                                Err(error) => {
+                                                    logger.error(format!("Error adding artist {:?} due to {}", artist_value.clone(), error.to_string()));
+                                                    continue;
+                                                }
+                                            }
+                                        }
+                                        Some(selected_artist) => selected_artist
+                                    }
+                                }
+                                Err(error) => {
+                                    logger.error(format!("Error fetching artist {}", error.to_string()));
+                                    return ();
+                                }
+                            };
+                            artists.push(artist);
+                        }
+                    }
+                }
+
+                let mut album_artists = vec![];
+
+                match metadata.album_artist {
+                    None => {}
+                    Some(album_artists_vec) => {
+                        for album_artist_value in album_artists_vec {
+                            let album_artist = match entity::artist::Entity::find()
+                                .filter(
+                                    artist::Column::Name.contains(album_artist_value.clone())
+                                ).one(database_lock)
+                                .await {
+                                Ok(album_artist) => {
+                                    match album_artist {
+                                        None => {
+                                            let album_artist_new = ActiveModel {
+                                                id: NotSet,
+                                                name: Set(album_artist_value.clone()),
+                                            };
+                                            match album_artist_new.insert(database_lock).await {
+                                                Ok(album_artist_added) => album_artist_added,
+                                                Err(_) => {
+                                                    logger.error(format!("Error adding album_artist {:?}", album_artist_value.clone()));
+                                                    continue;
+                                                }
+                                            }
+                                        }
+                                        Some(selected_album_artist) => selected_album_artist
+                                    }
+                                }
+                                Err(error) => {
+                                    logger.error(format!("Error fetching album_artist {}", error.to_string()));
+                                    return ();
+                                }
+                            };
+                            album_artists.push(album_artist);
+                        }
+                    }
+                }
+
+                let album_value = metadata.album.unwrap_or_else(|| "No album".to_string());
+                let album = match entity::album::Entity::find()
+                    .filter(
+                        album::Column::Title.contains(album_value.clone())
+                    )
+                    .one(database_lock)
+                    .await {
+                    Ok(album) => {
+                        match album {
+                            None => {
+                                let album_new = entity::album::ActiveModel {
+                                    id: NotSet,
+                                    blur_hash: Default::default(),
+                                    released: Default::default(),
+                                    title: Set(album_value.clone()),
+                                };
+                                match album_new.insert(database_lock).await {
+                                    Ok(album_added) => album_added,
+                                    Err(_) => {
+                                        logger.error(format!("Error adding album {:?}", album_value.clone()));
+                                        return ();
+                                    }
+                                }
+                            }
+                            Some(selected_album) => selected_album
+                        }
+                    }
+                    Err(error) => {
+                        logger.error(format!("Error fetching artist {}", error.to_string()));
+                        return ();
+                    }
+                };
+
+
+                let track_value = metadata.title.unwrap_or_else(|| "No track".to_string());
+                let track = match entity::track::Entity::find()
+                    .filter(
+                        track::Column::FileLocation.contains(path.clone().into_path().to_str().unwrap_or_else(|| {
+                            logger.error("Fatal error when unwraping path string");
+                            return "";
+                        })),
+                    ).one(database_lock)
+                    .await {
+                    Ok(track) => {
+                        match track {
+                            None => {
+                                let track_new = entity::track::ActiveModel {
+                                    id: Default::default(),
+                                    title: Set(track_value.clone()),
+                                    length: Set(metadata.duration.unwrap_or_else(|| 0)),
+                                    file_location: Set(path.clone().into_path().to_str().unwrap().parse().unwrap()),
+                                    album: Set(album.id),
+                                    artwork: NotSet,
+                                };
+                                match track_new.insert(database_lock).await {
+                                    Ok(track_added) => track_added,
+                                    Err(error) => {
+                                        logger.error(format!("Error adding track {:?} due to {}", track_value.clone(), error.to_string()));
+                                        return ();
+                                    }
+                                }
+                            }
+                            Some(selected_track) => selected_track
+                        }
+                    }
+                    Err(error) => {
+                        logger.error(format!("Error fetching track {:?}", track_value));
+                        return ();
+                    }
+                };
+
+
+                logger.info(format!("Indexed file at {}", path.clone().file_name().to_str().unwrap().to_string()));
+                return ();
+            });
+            task_handles.push(task_handle)
+        }
+
+        //LibraryService::run_limited_tasks(task_handles, 2).await;
+
+        let results: Vec<_> = futures::future::join_all(task_handles).await;
+
+
+        let ended = Instant::now();
+
+        logger.done().success(format!("Finished indexing library, took {:?}", (ended - started_instant)));
+
+        Ok((1, 1, 1))
+    }
+
+
+    pub fn extract_metadata<P: AsRef<Path>>(&self, path: P) -> Result<TrackMetadata, WaveError> {
+        // Open the media file.
+        let file = File::open(path.as_ref())?;
+
+        // Create the media source stream.
+        let mss = MediaSourceStream::new(Box::new(file), Default::default());
+
+        // Create a hint to help the format registry guess the format of the stream.
+        let mut hint = Hint::new();
+
+        // Provide the hint based on the file extension.
+        if let Some(ext) = path.as_ref().extension() {
+            hint.with_extension(&ext.to_string_lossy());
+        }
+
+        // Probe the media stream for a supported format.
+        let probed = get_probe().format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())?;
+        let mut format = probed.format;
+
+        // Initialize empty metadata fields.
+        let mut title = None;
+        let mut album = None;
+        let mut artist = Vec::new();
+        let mut album_artist = Vec::new();
+        let mut release_date = None;
+        let mut genre = None;
+        let mut artworks = Vec::new();
+
+        // Iterate over the metadata if present.
+        if let Some(metadata) = format.metadata().current() {
+            for tag in metadata.tags() {
+                match tag.std_key {
+                    Some(StandardTagKey::TrackTitle) => title = Some(tag.value.clone().to_string()),
+                    Some(StandardTagKey::Album) => album = Some(tag.value.clone().to_string()),
+                    Some(StandardTagKey::Artist) => {
+                        artist.push((tag.value.clone().to_string()))
+                    }
+                    Some(StandardTagKey::AlbumArtist) => {
+                        album_artist.push((tag.value.clone().to_string()))
+                    }
+                    Some(StandardTagKey::Date) => release_date = Some(tag.value.clone().to_string()),
+                    Some(StandardTagKey::Genre) => genre = Some(tag.value.clone().to_string()),
+                    _ => {}
+                }
+            }
+
+            for visual in metadata.visuals() {
+                if let data = visual.data.clone() {
+                    artworks.push(TrackArtwork {
+                        height: 1000,
+                        width: 1000,
+                        data: Vec::from(data),
+                    })
+                }
+            }
+        }
+
+        let artist_field = Some(artist);
+        let artist_album_field = Some(album_artist);
+
+
+        let length = match self.get_track_length_seconds(path.as_ref().to_str().unwrap()) {
+            Ok(data) => { data }
+            Err(_) => { 0 }
+        };
+
+        Ok(TrackMetadata {
+            title,
+            album,
+            artist: artist_field,
+            album_artist: artist_album_field,
+            release_date,
+            genre,
+            duration: Some(length),
+            artworks,
+        })
+    }
+
     pub async fn index_library(&self) -> Result<String, WaveError> {
         let mut log = Logger::new();
 
@@ -369,7 +823,7 @@ impl LibraryService {
 
                 let artists_active_models = match tag.artists() {
                     Some(artists) => artists.iter().map(|artist| {
-                        log.info(format!("Now indexing artist {:?}", String::from_utf8_lossy((*artist).as_bytes()).to_string() ));
+                        log.info(format!("Now indexing artist {:?}", String::from_utf8_lossy((*artist).as_bytes()).to_string()));
                         ArtistActiveModel {
                             id: NotSet,
                             name: Set(String::from(*artist).replace("\u{0000}", "")),
@@ -438,7 +892,7 @@ impl LibraryService {
                     None => String::from("Unknown"),
                 };
 
-                log.info(format!("Indexing the Track Title {:?} at path {:?}", track_title.clone(), path.clone().to_str().unwrap_or("NOT FOUND AAAA")));
+                log.info(format!("Indexing the Track Title {:?} at path {:?}", track_title.clone(), path.to_str().unwrap_or("NOT FOUND AAAA")));
 
                 let _track_number = match tag.track_number() {
                     Some(track_number) => Set(Some(track_number)),
@@ -487,6 +941,7 @@ impl LibraryService {
                     album: album_active_model.id.clone(),
                     length: track_length,
                     file_location: Set(track_file_location),
+                    artwork: NotSet,
                 }).await;
 
 
@@ -670,6 +1125,7 @@ impl LibraryService {
                 album: active_model.album.clone(),
                 length: active_model.length.clone(),
                 file_location: active_model.file_location.clone(),
+                artwork: active_model.artwork.clone(),
             }
         )
     }
@@ -771,6 +1227,24 @@ impl LibraryService {
                 released: active_model.released.clone(),
             }
         )
+    }
+
+    async fn generate_blur_hash_from_u8(&self, picture: &TrackArtwork) -> Result<String, WaveError> {
+        let img = ImageReader::new(Cursor::new(picture.data.clone())).with_guessed_format();
+        let img = if let Ok(img) = img {
+            img
+        } else {
+            return Err(WaveError::new("Error reading image"));
+        };
+        let image = img.decode();
+        let image = if let Ok(image) = image {
+            image
+        } else {
+            return Err(WaveError::new("Error decoding image"));
+        };
+        let (w, h) = image.dimensions();
+        let blurhash = encode(3, 3, w, h, image.to_rgba8().as_bytes()).unwrap();
+        Ok(blurhash)
     }
 
     async fn generate_blurhash(&self, picture: Picture<'_>) -> Result<String, WaveError> {
@@ -877,4 +1351,23 @@ impl LibraryService {
             }
         };
     }
+}
+
+#[derive(Debug)]
+pub struct TrackMetadata {
+    pub title: Option<String>,
+    pub album: Option<String>,
+    pub artist: Option<Vec<String>>,
+    pub album_artist: Option<Vec<String>>,
+    pub release_date: Option<String>,
+    pub genre: Option<String>,
+    pub duration: Option<i32>,
+    pub artworks: Vec<TrackArtwork>, // Artworks as a vector of bytes
+}
+
+#[derive(Debug)]
+pub struct TrackArtwork {
+    pub width: u32,
+    pub height: u32,
+    pub data: Vec<u8>,
 }

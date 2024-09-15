@@ -45,17 +45,16 @@ WORKDIR /app
 
 # Arguments
 ENV POSTGRES_URL=${POSTGRES_URL}
-ENV GRPC_PORT=${GRPC_PORT}
-ENV WEB_PORT=${WEB_PORT}
 ENV MEILISEARCH_API_URL=${MEILISEARCH_API_URL}
 ENV MEILISEARCH_API_KEY=${MEILISEARCH_API_KEY}
 ENV JWT_SECRET=${JWT_SECRET}
 
 EXPOSE 3000
+EXPOSE 50051
 # Copy the built binary from the builder stage to the final image
 # COPY --from=builder /app/target/release/wavenet .
 COPY --from=builder /usr/local/bin/wavenet .
 
-VOLUME ["/library"]
+VOLUME ["/library","/images"]
 # Set the entrypoint for the container
 ENTRYPOINT ["./wavenet"]

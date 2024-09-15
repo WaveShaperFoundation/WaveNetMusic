@@ -22,12 +22,18 @@ impl WaveError {
     }
 }
 
+impl From<symphonia::core::errors::Error> for WaveError {
+    fn from(error: symphonia::core::errors::Error) -> Self {
+        WaveError {
+            message: format!("Symphonia Error: {}", error.to_string())
+        }
+    }
+}
 
 impl From<WaveError> for Status {
     fn from(error: WaveError) -> Self {
         Status::new(tonic::Code::Internal, error.message)
     }
-
 }
 
 impl From<meilisearch_sdk::errors::Error> for WaveError {
@@ -70,7 +76,7 @@ impl From<sea_orm::DbErr> for WaveError {
     }
 }
 
-impl From<std::string::String> for WaveError{
+impl From<std::string::String> for WaveError {
     fn from(error: std::string::String) -> Self {
         WaveError {
             message: error,

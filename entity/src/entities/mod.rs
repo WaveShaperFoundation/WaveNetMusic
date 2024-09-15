@@ -6,6 +6,8 @@ pub mod album;
 pub mod artist;
 pub mod artist_album;
 pub mod artist_track;
+pub mod artwork;
+pub mod cover_art;
 pub mod playlist;
 pub mod playlist_track_item;
 pub mod playlist_user;

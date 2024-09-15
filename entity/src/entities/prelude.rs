@@ -4,6 +4,8 @@ pub use super::album::Entity as Album;
 pub use super::artist::Entity as Artist;
 pub use super::artist_album::Entity as ArtistAlbum;
 pub use super::artist_track::Entity as ArtistTrack;
+pub use super::artwork::Entity as Artwork;
+pub use super::cover_art::Entity as CoverArt;
 pub use super::playlist::Entity as Playlist;
 pub use super::playlist_track_item::Entity as PlaylistTrackItem;
 pub use super::playlist_user::Entity as PlaylistUser;

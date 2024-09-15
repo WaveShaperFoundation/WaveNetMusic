@@ -198,7 +198,8 @@ pub enum Track {
     Album,
     Title,
     Length,
-    FileLocation
+    FileLocation,
+    Artwork
 }
 
 #[derive(Iden)]

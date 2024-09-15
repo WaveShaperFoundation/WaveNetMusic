@@ -17,7 +17,7 @@ use axum::{Router};
 use axum::routing::get;
 use services::auth_service::AuthenticationService;
 use tonic::transport::Server;
-use sea_orm::{DatabaseConnection};
+use sea_orm::{ConnectOptions, DatabaseConnection};
 use sea_orm::Database;
 use tokio::sync::RwLock;
 use migration::{Migrator, MigratorTrait};
@@ -35,6 +35,7 @@ use crate::proto::wavenet::playlist_server::PlaylistServer;
 use crate::routes::axum_routes::{retrieve_album_cover, stream_audio_file};
 use dotenv::dotenv;
 use std::env;
+use std::time::Duration;
 use axum::http::{HeaderName, Method};
 use crate::services::search_service::SearchService;
 use paris::Logger;
@@ -73,7 +74,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
     log.info(format!("Connecting to database at port {}",postgres_url.clone()));
-    let connection: DatabaseConnection = Database::connect(postgres_url).await?;
+
+
+    let mut opt = ConnectOptions::new(postgres_url);
+    opt.max_connections(100)
+        .min_connections(20)
+        .connect_timeout(Duration::from_secs(80))
+        .acquire_timeout(Duration::from_secs(80))
+        .idle_timeout(Duration::from_secs(80))
+        .max_lifetime(Duration::from_secs(80)); // Setting default PostgreSQL schema
+    let connection: DatabaseConnection = Database::connect(opt).await?;
     Migrator::up(&connection, None).await?;
     let connection_arc = Arc::new(RwLock::new(connection));
 
@@ -82,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let library_service = library_arc.clone();
     if true {
-        let library_services_clone = library_service.clone().write().await.index_library().await;
+        let library_services_clone = library_service.clone().write().await.scan_library().await;
         match library_services_clone {
             Ok(_) => {  }
             Err(error) => {

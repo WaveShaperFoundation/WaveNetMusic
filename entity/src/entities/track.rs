@@ -12,6 +12,7 @@ pub struct Model {
     #[sea_orm(unique)]
     pub file_location: String,
     pub album: i32,
+    pub artwork: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -26,6 +27,14 @@ pub enum Relation {
     Album,
     #[sea_orm(has_many = "super::artist_track::Entity")]
     ArtistTrack,
+    #[sea_orm(
+        belongs_to = "super::artwork::Entity",
+        from = "Column::Artwork",
+        to = "super::artwork::Column::Id",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    Artwork,
     #[sea_orm(has_many = "super::playlist_track_item::Entity")]
     PlaylistTrackItem,
     #[sea_orm(has_many = "super::user_likes::Entity")]
@@ -41,6 +50,12 @@ impl Related<super::album::Entity> for Entity {
 impl Related<super::artist_track::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::ArtistTrack.def()
+    }
+}
+
+impl Related<super::artwork::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Artwork.def()
     }
 }
 
