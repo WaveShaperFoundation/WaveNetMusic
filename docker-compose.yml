@@ -4,8 +4,6 @@ services:
     image: postgres:latest
     networks:
       - wavenet
-    ports:
-      - 5432:5432
     environment:
       - POSTGRES_USER=waveywaveysql
       - POSTGRES_PASSWORD=FtEn5W83nd7MUxElPjJAK8
@@ -14,7 +12,7 @@ services:
       - database:/var/lib/postgres
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready", "-d", "wavenet" ]
+      test: [ "CMD-SHELL", "pg_isready", "-d", "wavenet", "-U", "waveywaveysql" ]
       interval: 30s
       timeout: 60s
       retries: 5
@@ -26,13 +24,11 @@ services:
     environment:
       - http_proxy
       - https_proxy
-      - MEILI_MASTER_KEY=WaveySearchMeili
+      - MEILI_MASTER_KEY=7VIvUB_5CMnNr1XJ0jurD_O91GodcTwFcNNmRBHPtCY
       - MEILI_NO_ANALYTICS=${MEILI_NO_ANALYTICS:-true}
       - MEILI_ENV=${MEILI_ENV:-development}
       - MEILI_LOG_LEVEL
-      - MEILI_DB_PATH=/data.ms
-    ports:
-      - 7700:7700
+      - MEILI_DB_PATH=${MEILI_DB_PATH:-/data.ms}
     networks:
       - wavenet
     volumes:
@@ -48,36 +44,26 @@ services:
     container_name: wave-net-server
     networks:
       - wavenet
+    ports:
+      - 3000:3000
+      - 50051:50051
     depends_on:
       - postgres
       - meilisearch
-    environment:
-      - POSTGRES_URL=postgres://waveywaveysql:FtEn5W83nd7MUxElPjJAK8@postgres/wavenet
-      - MEILISEARCH_API_URL=http://meilisearch:7000
-      - MEILISEARCH_API_KEY=WaveySearchMeili
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      JWT_SECRET: WAVEYWEWVAEY
+      MEILISEARCH_API_KEY: 7VIvUB_5CMnNr1XJ0jurD_O91GodcTwFcNNmRBHPtCY
+      MEILISEARCH_API_URL: http://meilisearch:7700
+      POSTGRES_URL: postgres://waveywaveysql:FtEn5W83nd7MUxElPjJAK8@postgres/wavenet
+      GRPC_PORT: 50051
+      WEB_PORT: 3000
     volumes:
-      - /mnt/nasdrive/NASDrive/Tidal RIP/Album:/library
+      - /mnt/nasdrive/NASDrive/Tidal RIP/:/library
       - cache:/cache
 
-  caddy:
-    container_name: wave-caddy
-    image: caddy
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-    networks:
-      - wavenet
-    depends_on:
-      - wavenet
-    cap_add:
-      - NET_ADMIN
-    ports:
-      - 80:80
-      - 443:443
-      - 50051:50051
-      - 3000:3000
 volumes:
   database:
     name: wavenet-database-storage
